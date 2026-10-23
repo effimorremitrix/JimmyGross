@@ -1,0 +1,14 @@
+# Local development database only. Production Postgres must run on an HDS-certified host.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: consentza
+      POSTGRES_PASSWORD: consentza
+      POSTGRES_DB: consentza
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

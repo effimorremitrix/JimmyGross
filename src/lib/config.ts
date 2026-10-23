@@ -1,0 +1,44 @@
+import "server-only";
+import { z } from "zod";
+
+const schema = z.object({
+  DATABASE_URL: z.string().min(1),
+  SESSION_SECRET: z.string().min(32, "SESSION_SECRET must be at least 32 characters"),
+  APP_URL: z.string().url().default("http://localhost:3000"),
+  SIGNATURE_PROVIDER: z.enum(["mock", "yousign"]).default("mock"),
+  YOUSIGN_API_KEY: z.string().optional(),
+  YOUSIGN_BASE_URL: z.string().url().default("https://api-sandbox.yousign.app/v3"),
+  YOUSIGN_WEBHOOK_SECRET: z.string().optional(),
+  SMS_PROVIDER: z.enum(["console", "twilio"]).default("console"),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM: z.string().optional(),
+  /** Shows the mock OTP on screen. Never enable with real patients. */
+  DEMO_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  LINK_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(10),
+});
+
+export type Config = z.infer<typeof schema>;
+
+let cached: Config | undefined;
+
+export function config(): Config {
+  if (cached) return cached;
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    throw new Error(`Invalid configuration: ${issues}`);
+  }
+  const c = parsed.data;
+  if (c.SIGNATURE_PROVIDER === "yousign" && !c.YOUSIGN_API_KEY) {
+    throw new Error("SIGNATURE_PROVIDER=yousign requires YOUSIGN_API_KEY");
+  }
+  if (c.SMS_PROVIDER === "twilio" && !(c.TWILIO_ACCOUNT_SID && c.TWILIO_AUTH_TOKEN && c.TWILIO_FROM)) {
+    throw new Error("SMS_PROVIDER=twilio requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM");
+  }
+  cached = c;
+  return c;
+}
