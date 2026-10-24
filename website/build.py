@@ -99,6 +99,33 @@ def check(fields, path):
     assert 110 <= len(d) <= 165, f"{path}: description length {len(d)}"
 
 
+BRAND = re.compile(r"(?<![\w-])([ÉéE]claira)(?![\w-])")
+
+
+def protect_brand(page):
+    """Marks every visible "Éclaira" in the body translate="no", so browser
+    translation keeps the name (Chrome otherwise renders it "illuminated").
+    Only text between tags is touched: attributes, scripts and the head stay as is."""
+    head, sep, body = page.partition("<body")
+    if not sep:
+        return page, 0
+    parts = re.split(r"(<[^>]+>)", body)
+    count = 0
+    raw = None  # inside <script> or <style>
+    for i, part in enumerate(parts):
+        if part.startswith("<"):
+            tag = re.match(r"</?\s*(\w+)", part)
+            name = tag.group(1).lower() if tag else ""
+            if name in ("script", "style"):
+                raw = None if part.startswith("</") else name
+            continue
+        if raw or "laira" not in part:
+            continue
+        parts[i], n = BRAND.subn(r'<span translate="no">\1</span>', part)
+        count += n
+    return head + sep + "".join(parts), count
+
+
 def build():
     if DIST.exists():
         shutil.rmtree(DIST)
@@ -131,6 +158,7 @@ def build():
             .replace("{{VERSION}}", VERSION)
         )
         assert "{{" not in out, f"unreplaced token in {page}"
+        out, _ = protect_brand(out)
         for block in re.findall(r'<script type="application/ld\+json">(.*?)</script>', out, re.S):
             json.loads(block)
         dest = DIST / rel

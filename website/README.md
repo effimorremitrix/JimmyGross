@@ -10,7 +10,7 @@ python3 -m http.server 4173 --directory dist
 
 **Cloudflare Pages settings:** root directory `website`, build command `python3 build.py`, output directory `dist`, environment variables `BASE` (the site's final URL) and `CONTACT`.
 
-- `pages/` holds the pages. Each starts with a TITLE / DESC / PATH comment and shares `_head`, `_header`, `_footer`. The build checks title and description lengths, validates JSON-LD, and writes `sitemap.xml`, `robots.txt`, `site.webmanifest` and `_headers` (CSP, caching).
+- `pages/` holds the pages. Each starts with a TITLE / DESC / PATH comment and shares `_head`, `_header`, `_footer`. The build checks title and description lengths, validates JSON-LD, marks every visible "Éclaira" `translate="no"` (browser translation would otherwise turn the name into "illuminated"), and writes `sitemap.xml`, `robots.txt`, `site.webmanifest` and `_headers` (CSP, caching).
 - `video/explainer.html` is the source of the hero film: an HTML/SVG animation driven by `render(t)`. Edit the scenes there, never the MP4. `npm run video:preview` renders keyframes; `npm run video:frames` renders all frames, then encode:
 
 ```bash
