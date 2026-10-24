@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonClass, Card, Chip, Icon } from "@/components/ui";
-import { AUDIT_LABEL } from "@/lib/audit";
+import { AUDIT_LABEL, auditDetail } from "@/lib/audit";
 import { requireStaff } from "@/lib/auth";
 import { frDateTime, parisYmd } from "@/lib/dates";
 import { fmtDuration } from "@/lib/pdf";
+import { LOCALE_LABEL_FR, LOCALES } from "@/domain/i18n";
 import { applicableQuestions } from "@/domain/precheck";
 import { isTerminal, STATUS_LABEL, statusTone } from "@/domain/status";
 import { requestDetail } from "@/server/dashboard";
-import { cancelRequest, reviewFlag } from "../../actions";
+import { cancelRequest, reviewFlag, setRequestLanguage } from "../../actions";
 import { RowActions } from "../../row-actions";
 import { ConfirmActForm } from "./confirm-act-form";
 
@@ -27,7 +28,8 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const d = await requestDetail(staff.practiceId, id);
   if (!d) notFound();
-  const { request: r, patient, appointment, version, flags, reads, events, docs } = d;
+  const { request: r, patient, appointment, version, flags, reads, events, docs, language } = d;
+  const languageLocked = !!r.patientAckAt || isTerminal(r.status);
   const questions = applicableQuestions(version.questions, r.plannedAct);
   const totalMs = reads.reduce((s, e) => s + e.visibleMs, 0);
   const fullTextCount = reads.filter((e) => e.fullTextOpenedAt).length;
@@ -53,6 +55,13 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={statusTone(r.status)}>{STATUS_LABEL[r.status]}</Chip>
           <Chip tone="info">{r.signatureLevel === "AES" ? "Signature avancée" : "Signature simple + SMS"}</Chip>
+          {language.requested !== "fr" && (
+            <Chip tone={language.effective === language.requested ? "info" : "warn"}>
+              {language.effective === language.requested
+                ? `En ${LOCALE_LABEL_FR[language.effective]}`
+                : `${LOCALE_LABEL_FR[language.requested as keyof typeof LOCALE_LABEL_FR] ?? language.requested} demandé, envoyé en français`}
+            </Chip>
+          )}
         </div>
       </div>
 
@@ -119,6 +128,15 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
               intégral ouvert pour {fullTextCount} partie(s) sur {version.sections.length}
               {fullDocAt ? `, document complet (PDF) ouvert le ${frDateTime(fullDocAt)}` : ""}.
             </p>
+            <p className="mt-1 text-[14px] text-muted">
+              Langue : {LOCALE_LABEL_FR[language.effective]}
+              {language.approvedAt
+                ? ` (traduction validée${language.approvedBy ? ` par ${language.approvedBy}` : ""} le ${frDateTime(language.approvedAt)} ; texte de référence : original français)`
+                : language.requested !== language.effective
+                  ? ` (traduction en ${LOCALE_LABEL_FR[language.requested as keyof typeof LOCALE_LABEL_FR] ?? language.requested} pas encore validée sur la page Modèles)`
+                  : ""}
+              .
+            </p>
             <ul className="mt-3 flex flex-col gap-1.5 text-[14px]">
               {version.sections.map((s) => {
                 const e = reads.find((x) => x.sectionId === s.id && x.acknowledgedAt);
@@ -145,6 +163,7 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
                   <span className="w-40 tabular-nums text-muted">{frDateTime(e.at)}</span>
                   <span className="flex-1">
                     {AUDIT_LABEL[e.type] ?? e.type}
+                    {auditDetail(e.type, e.data) ? ` (${auditDetail(e.type, e.data)})` : ""}
                     <span className="text-muted"> · {e.actor.startsWith("user:") ? "cabinet" : e.actor === "patient" ? "patient" : e.actor}</span>
                     {e.ip ? <span className="text-muted"> · IP {e.ip}</span> : null}
                   </span>
@@ -205,6 +224,23 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
                 {r.sendCount} envoi(s){r.lastSentAt ? `, dernier le ${frDateTime(r.lastSentAt)}` : ""}. Un nouveau lien désactive le précédent.
               </p>
               <RowActions requestId={r.id} signed={false} closed={false} />
+              {!languageLocked && (
+                <form action={setRequestLanguage.bind(null, r.id)} className="flex flex-wrap items-end gap-2">
+                  <label className="flex min-w-0 flex-1 flex-col gap-1 text-[14px] font-semibold">
+                    Langue du patient
+                    <select name="locale" defaultValue={r.locale} className="h-11 rounded-xl border border-line-strong bg-white px-3 text-[15px] font-normal">
+                      {LOCALES.map((l) => (
+                        <option key={l} value={l}>
+                          {LOCALE_LABEL_FR[l].replace(/^./, (c) => c.toUpperCase())}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="submit" className={buttonClass("secondary", "text-[14px]")}>
+                    Changer
+                  </button>
+                </form>
+              )}
               <form action={cancelRequest.bind(null, r.id)}>
                 <button type="submit" className={buttonClass("danger", "w-full text-[14px]")}>
                   Annuler la demande

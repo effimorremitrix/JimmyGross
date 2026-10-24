@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { parisDayRange } from "@/lib/dates";
+import { effectiveLocale } from "./locale";
 
 export type DayRow = Awaited<ReturnType<typeof dayView>>["rows"][number];
 
@@ -75,5 +76,16 @@ export async function requestDetail(practiceId: string, requestId: string) {
       .orderBy(desc(schema.documents.createdAt)),
   ]);
   if (!patient || !appointment || !version) return null;
-  return { request, patient, appointment, version, flags, reads, events, docs };
+  const { locale, translation } = await effectiveLocale(request.templateVersionId, request.locale);
+  const approver = translation?.approvedById
+    ? await db.query.users.findFirst({ where: eq(schema.users.id, translation.approvedById) })
+    : null;
+  /** Requested vs actually delivered language (French when the translation is not approved). */
+  const language = {
+    requested: request.locale,
+    effective: locale,
+    approvedAt: translation?.approvedAt ?? null,
+    approvedBy: approver?.name ?? null,
+  };
+  return { request, patient, appointment, version, flags, reads, events, docs, language };
 }

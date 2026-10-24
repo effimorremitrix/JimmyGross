@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button, cx, Icon } from "@/components/ui";
+import type { Locale } from "@/domain/i18n";
 import type { ConsentBlock, InfoSection, PrecheckAnswers, Question, SignatureLevel } from "@/domain/types";
+import { patientText, type PatientText } from "@/i18n/patient";
 import { confirmOtp, markFullTextOpened, markSectionRead, resendOtp, submitConsent, submitPrecheck } from "./actions";
 import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
 
@@ -13,6 +15,7 @@ export type FlowStep = "welcome" | "info" | "precheck" | "consent" | "id" | "otp
 
 interface Props {
   token: string;
+  locale: Locale;
   initialStep: FlowStep;
   firstName: string;
   fullName: string;
@@ -37,8 +40,9 @@ interface Props {
 }
 
 export function PatientFlow(p: Props) {
+  const t = patientText(p.locale);
   const [step, setStep] = useState<FlowStep>(p.initialStep);
-  const [otpInfo, setOtpInfo] = useState<OtpInfo>({ sentTo: "sur votre téléphone ou par e-mail" });
+  const [otpInfo, setOtpInfo] = useState<OtpInfo>({ sentTo: t.otpSentDefault });
   const signatureRef = useRef<string | null>(null);
   const ackRef = useRef(false);
 
@@ -46,11 +50,11 @@ export function PatientFlow(p: Props) {
   const idx = steps.indexOf(step);
   const labels: Record<FlowStep, string> = {
     welcome: "",
-    info: "Fiche d'information",
-    precheck: "Questionnaire",
-    consent: "Consentement",
-    id: "Identité",
-    otp: "Code SMS",
+    info: t.stepInfo,
+    precheck: t.stepPrecheck,
+    consent: t.stepConsent,
+    id: t.stepId,
+    otp: t.stepOtp,
   };
 
   useEffect(() => {
@@ -63,12 +67,12 @@ export function PatientFlow(p: Props) {
       {step !== "welcome" && (
         <div className="flex flex-col gap-2">
           <p className="text-[13px] text-muted">
-            Étape {idx + 1} sur {steps.length} · {labels[step]}
+            {t.stepOf(idx + 1, steps.length, labels[step])}
           </p>
           <div
             className="h-1.5 overflow-hidden rounded-full bg-brand-soft"
             role="progressbar"
-            aria-label="Progression"
+            aria-label={t.progress}
             aria-valuemin={0}
             aria-valuemax={steps.length}
             aria-valuenow={idx + 1}
@@ -100,6 +104,7 @@ export function PatientFlow(p: Props) {
       {step === "id" && (
         <IdStep
           token={p.token}
+          t={t}
           onBack={() => setStep("consent")}
           signature={() => ({ png: signatureRef.current, ack: ackRef.current })}
           onOtp={(info) => {
@@ -108,7 +113,7 @@ export function PatientFlow(p: Props) {
           }}
         />
       )}
-      {step === "otp" && <OtpStep token={p.token} info={otpInfo} demoMode={p.demoMode} />}
+      {step === "otp" && <OtpStep token={p.token} t={t} info={otpInfo} demoMode={p.demoMode} />}
     </div>
   );
 }
@@ -116,39 +121,38 @@ export function PatientFlow(p: Props) {
 // ---------------------------------------------------------------------------
 
 function Welcome(p: Props & { onStart(): void }) {
+  const t = patientText(p.locale);
   return (
     <section className="flex flex-col gap-5">
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold leading-tight outline-none">
-        Bonjour {p.firstName}, préparons votre rendez-vous
+        {t.welcomeTitle(p.firstName)}
       </h1>
       <div className="rounded-2xl border border-line bg-white p-4">
-        <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">Votre rendez-vous</p>
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">{t.yourAppointment}</p>
         <p className="mt-1 text-[17px] font-semibold">{p.visitReason}</p>
         <p className="text-[14px] text-muted first-letter:uppercase">{p.appointmentLabel}</p>
       </div>
-      <p className="text-[15px] leading-relaxed">Avant le geste, merci de compléter ces étapes. Comptez environ 5 minutes.</p>
+      <p className="text-[15px] leading-relaxed">{t.welcomeLead}</p>
       <ol className="flex flex-col gap-3">
-        {["Lire la fiche d'information", "Répondre au questionnaire de sécurité", "Signer votre consentement"].map((t, i) => (
-          <li key={t} className="flex items-center gap-3 text-[15px]">
+        {t.welcomeSteps.map((label, i) => (
+          <li key={label} className="flex items-center gap-3 text-[15px]">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-soft text-[13px] font-bold text-brand" aria-hidden="true">
               {i + 1}
             </span>
-            {t}
+            {label}
           </li>
         ))}
       </ol>
       <div className="rounded-xl bg-brand-soft px-4 py-3 text-[14px] leading-relaxed">
-        {p.level === "AES"
-          ? "Signature avancée : vous signerez du doigt, puis nous vérifierons votre pièce d'identité et un code reçu par SMS."
-          : "Signature : vous signerez du doigt, puis confirmerez avec un code à usage unique."}
+        {p.level === "AES" ? t.levelAes : t.levelSes}
       </div>
       <ul className="flex flex-col gap-1.5 text-[14px] leading-relaxed text-muted">
-        {p.intro.map((t) => (
-          <li key={t}>{t}</li>
+        {p.intro.map((line) => (
+          <li key={line}>{line}</li>
         ))}
       </ul>
       <Button onClick={p.onStart} className="h-13">
-        Commencer
+        {t.start}
       </Button>
     </section>
   );
@@ -167,8 +171,8 @@ const TONE: Record<string, string> = {
 function FullText({ section }: { section: InfoSection }) {
   return (
     <div className="flex flex-col gap-3 text-[15px] leading-relaxed text-ink-2">
-      {section.paragraphs.map((t) => (
-        <p key={t}>{t}</p>
+      {section.paragraphs.map((para) => (
+        <p key={para}>{para}</p>
       ))}
       {section.callouts?.map((c) => (
         <div key={c.heading} className={cx("rounded-xl px-4 py-3", TONE[c.tone])}>
@@ -185,6 +189,7 @@ function FullText({ section }: { section: InfoSection }) {
 }
 
 function InfoStep(p: Props & { onDone(): void }) {
+  const t = patientText(p.locale);
   const [read, setRead] = useState<Set<string>>(new Set(p.readIds));
   const [opened, setOpened] = useState<Set<string>>(new Set(p.fullTextIds));
   const [error, setError] = useState<string | null>(null);
@@ -238,13 +243,9 @@ function InfoStep(p: Props & { onDone(): void }) {
   return (
     <section className="flex flex-col gap-4">
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold outline-none">
-        Fiche d&apos;information
+        {t.infoTitle}
       </h1>
-      <p className="text-[15px] leading-relaxed text-ink-2">
-        {p.useSummaries
-          ? "Voici l'essentiel de chaque partie. Le texte complet du médecin est accessible sous chaque résumé. Lisez puis confirmez ; vous pourrez poser toutes vos questions au médecin avant le geste."
-          : "Lisez chaque partie puis confirmez. Vous pourrez poser toutes vos questions au médecin avant le geste."}
-      </p>
+      <p className="text-[15px] leading-relaxed text-ink-2">{p.useSummaries ? t.infoLeadSummaries : t.infoLeadFull}</p>
       <a
         href={`/p/${p.token}/document`}
         target="_blank"
@@ -252,11 +253,11 @@ function InfoStep(p: Props & { onDone(): void }) {
         className="inline-flex min-h-11 items-center gap-2 self-start text-[15px] font-medium text-brand underline-offset-2 hover:underline"
       >
         <Icon name="doc" />
-        Lire le document complet (PDF)
-        <span className="sr-only"> (s&apos;ouvre dans un nouvel onglet)</span>
+        {t.fullPdf}
+        <span className="sr-only">{t.opensNewTab}</span>
       </a>
       <p className="text-[14px] font-medium text-muted" aria-live="polite">
-        {read.size} partie{read.size > 1 ? "s" : ""} lue{read.size > 1 ? "s" : ""} sur {p.sections.length}
+        {t.partsRead(read.size, p.sections.length)}
       </p>
       {p.sections.map((s) => {
         const done = read.has(s.id);
@@ -276,8 +277,8 @@ function InfoStep(p: Props & { onDone(): void }) {
             {p.useSummaries ? (
               <>
                 <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 text-[15px] leading-relaxed text-ink">
-                  {s.summary.map((t) => (
-                    <li key={t}>{t}</li>
+                  {s.summary.map((line) => (
+                    <li key={line}>{line}</li>
                   ))}
                 </ul>
                 <details
@@ -285,7 +286,7 @@ function InfoStep(p: Props & { onDone(): void }) {
                   onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && openFull(s.id)}
                 >
                   <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-[15px] font-medium text-brand [&::-webkit-details-marker]:hidden">
-                    <span>{opened.has(s.id) ? "Texte complet de cette partie" : "Lire le texte complet de cette partie"}</span>
+                    <span>{opened.has(s.id) ? t.fullTextOpened : t.readFullText}</span>
                     <Icon name="back" className="-rotate-90 transition-transform group-open:rotate-90" />
                   </summary>
                   <div className="border-t border-line px-4 py-3">
@@ -309,7 +310,7 @@ function InfoStep(p: Props & { onDone(): void }) {
               )}
             >
               {done && <Icon name="check" />}
-              {done ? "Lu" : pendingId === s.id ? "Enregistrement…" : "J'ai lu cette partie"}
+              {done ? t.read : pendingId === s.id ? t.saving : t.iReadThis}
             </button>
           </article>
         );
@@ -321,7 +322,7 @@ function InfoStep(p: Props & { onDone(): void }) {
       )}
       <StickyBar>
         <Button className="h-13 flex-1" disabled={!allRead} onClick={p.onDone}>
-          {allRead ? "Continuer" : `Encore ${p.sections.length - read.size} partie(s) à lire`}
+          {allRead ? t.continue : t.partsLeft(p.sections.length - read.size)}
         </Button>
       </StickyBar>
     </section>
@@ -331,6 +332,7 @@ function InfoStep(p: Props & { onDone(): void }) {
 // ---------------------------------------------------------------------------
 
 function PrecheckStep(p: Props & { onBack(): void; onDone(): void }) {
+  const t = patientText(p.locale);
   const [items, setItems] = useState<PrecheckAnswers["items"]>(p.initialAnswers?.items ?? {});
   const [ec, setEc] = useState(p.initialAnswers?.emergencyContact ?? { name: "", phone: "", relation: "" });
   const [error, setError] = useState<string | null>(null);
@@ -360,12 +362,9 @@ function PrecheckStep(p: Props & { onBack(): void; onDone(): void }) {
   return (
     <section className="flex flex-col gap-4">
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold outline-none">
-        Questionnaire avant le geste
+        {t.precheckTitle}
       </h1>
-      <p className="text-[15px] leading-relaxed text-ink-2">
-        Une réponse « Oui » ne contre-indique pas toujours le geste, mais peut nécessiter une adaptation ou un report. Le
-        cabinet en est informé avant votre venue.
-      </p>
+      <p className="text-[15px] leading-relaxed text-ink-2">{t.precheckLead}</p>
       {p.questions.map((q, i) => {
         const a = items[q.id];
         return (
@@ -385,7 +384,7 @@ function PrecheckStep(p: Props & { onBack(): void; onDone(): void }) {
                   )}
                 >
                   <input type="radio" className="sr-only" name={q.id} value={v} checked={a?.answer === v} onChange={() => set(q.id, { answer: v })} />
-                  {v === "oui" ? "Oui" : "Non"}
+                  {v === "oui" ? t.yes : t.no}
                 </label>
               ))}
             </div>
@@ -409,18 +408,18 @@ function PrecheckStep(p: Props & { onBack(): void; onDone(): void }) {
 
       {p.consent.collectEmergencyContact && (
         <fieldset className="rounded-2xl border border-line bg-white p-4">
-          <legend className="px-1 text-[15px] font-semibold">Personne à contacter en cas de problème (facultatif)</legend>
+          <legend className="px-1 text-[15px] font-semibold">{t.emergencyContact}</legend>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-[14px]">
-              Nom
+              {t.ecName}
               <input className="h-12 rounded-xl border border-line-strong px-3 text-[16px]" value={ec.name} autoComplete="off" onChange={(e) => setEc({ ...ec, name: e.target.value })} />
             </label>
             <label className="flex flex-col gap-1 text-[14px]">
-              Téléphone
+              {t.ecPhone}
               <input className="h-12 rounded-xl border border-line-strong px-3 text-[16px]" inputMode="tel" value={ec.phone} autoComplete="off" onChange={(e) => setEc({ ...ec, phone: e.target.value })} />
             </label>
             <label className="flex flex-col gap-1 text-[14px] sm:col-span-2">
-              Lien de parenté ou relation
+              {t.ecRelation}
               <input className="h-12 rounded-xl border border-line-strong px-3 text-[16px]" value={ec.relation} onChange={(e) => setEc({ ...ec, relation: e.target.value })} />
             </label>
           </div>
@@ -434,10 +433,10 @@ function PrecheckStep(p: Props & { onBack(): void; onDone(): void }) {
       )}
       <StickyBar>
         <Button variant="secondary" onClick={p.onBack} className="h-13">
-          Retour
+          {t.back}
         </Button>
         <Button className="h-13 flex-1" disabled={!complete || pending} onClick={submit}>
-          {pending ? "Envoi…" : "Continuer"}
+          {pending ? t.sending : t.continue}
         </Button>
       </StickyBar>
     </section>
@@ -454,6 +453,7 @@ function ConsentStep(
     onOtp(info: OtpInfo): void;
   },
 ) {
+  const t = patientText(p.locale);
   const pad = useRef<SignaturePadHandle>(null);
   const [hasInk, setHasInk] = useState(false);
   const [ack, setAck] = useState(false);
@@ -464,8 +464,8 @@ function ConsentStep(
 
   function next() {
     const png = pad.current?.toPng();
-    if (!png) return setError("Merci de signer dans le cadre.");
-    if (!ack) return setError("Merci de cocher la déclaration.");
+    if (!png) return setError(t.pleaseSign);
+    if (!ack) return setError(t.pleaseTick);
     setError(null);
     if (!p.onReady(png, ack)) return;
     start(async () => {
@@ -479,42 +479,42 @@ function ConsentStep(
   return (
     <section className="flex flex-col gap-4">
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold outline-none">
-        Votre consentement
+        {t.consentTitle}
       </h1>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-line bg-white p-4 text-[15px]">
-        <dt className="text-muted">Patient</dt>
+        <dt className="text-muted">{t.patient}</dt>
         <dd className="text-right font-semibold">{p.fullName}</dd>
         {birth && (
           <>
-            <dt className="text-muted">Né(e) le</dt>
+            <dt className="text-muted">{t.bornOn}</dt>
             <dd className="text-right font-semibold">{birth}</dd>
           </>
         )}
-        <dt className="text-muted">Geste prévu</dt>
+        <dt className="text-muted">{t.plannedAct}</dt>
         <dd className="text-right font-semibold">{p.plannedAct}</dd>
         {p.plannedLocation && (
           <>
-            <dt className="text-muted">Localisation</dt>
+            <dt className="text-muted">{t.location}</dt>
             <dd className="text-right font-semibold">{p.plannedLocation}</dd>
           </>
         )}
-        <dd className="col-span-2 text-[13px] text-muted">Le geste sera confirmé par le médecin le jour de l&apos;acte.</dd>
+        <dd className="col-span-2 text-[13px] text-muted">{t.confirmedOnDay}</dd>
       </dl>
 
       <label className="flex cursor-pointer gap-3 rounded-2xl border border-line bg-white p-4 text-[15px] leading-relaxed">
         <input type="checkbox" className="mt-1 h-5 w-5 flex-none accent-brand" checked={ack} onChange={(e) => setAck(e.target.checked)} />
         <span className="flex flex-col gap-2">
-          {p.consent.statement.map((t) => (
-            <span key={t}>{t}</span>
+          {p.consent.statement.map((line) => (
+            <span key={line}>{line}</span>
           ))}
         </span>
       </label>
 
       <div className="flex flex-col gap-2">
         <p className="text-[15px] font-semibold" id="sig-label">
-          Votre signature
+          {t.yourSignature}
         </p>
-        <SignaturePad ref={pad} onChange={onInk} fullName={p.fullName} />
+        <SignaturePad ref={pad} onChange={onInk} fullName={p.fullName} t={t} />
       </div>
 
       {error && (
@@ -524,10 +524,10 @@ function ConsentStep(
       )}
       <StickyBar>
         <Button variant="secondary" onClick={p.onBack} className="h-13">
-          Retour
+          {t.back}
         </Button>
         <Button className="h-13 flex-1" disabled={!hasInk || !ack || pending} onClick={next}>
-          {pending ? "Préparation…" : p.level === "AES" ? "Continuer" : "Recevoir mon code de signature"}
+          {pending ? t.preparing : p.level === "AES" ? t.continue : t.getSigningCode}
         </Button>
       </StickyBar>
     </section>
@@ -539,17 +539,19 @@ function ConsentStep(
 /** Demo-only identity step (mock AES). With Yousign, the ID check is hosted by Yousign. */
 function IdStep(p: {
   token: string;
+  t: PatientText;
   onBack(): void;
   signature(): { png: string | null; ack: boolean };
   onOtp(info: OtpInfo): void;
 }) {
+  const { t } = p;
   const [picked, setPicked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   function next() {
     const { png, ack } = p.signature();
-    if (!png) return setError("Signature manquante, revenez à l'étape précédente.");
+    if (!png) return setError(t.signatureMissing);
     start(async () => {
       const res = await submitConsent(p.token, { signaturePng: png, acknowledged: ack });
       if (!res.ok) return setError(res.error);
@@ -561,12 +563,9 @@ function IdStep(p: {
   return (
     <section className="flex flex-col gap-4">
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold outline-none">
-        Vérification d&apos;identité
+        {t.idTitle}
       </h1>
-      <p className="text-[15px] leading-relaxed text-ink-2">
-        Pour une signature avancée, votre pièce d&apos;identité est vérifiée. Elle sert uniquement à prouver que c&apos;est bien
-        vous qui signez.
-      </p>
+      <p className="text-[15px] leading-relaxed text-ink-2">{t.idLead}</p>
       <label
         className={cx(
           "flex h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 text-[15px] font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-[#9cc0ea]",
@@ -574,13 +573,10 @@ function IdStep(p: {
         )}
       >
         <Icon name={picked ? "check" : "id"} className="h-10 w-10" />
-        {picked ? "Pièce vérifiée" : "Photographier ma pièce d'identité"}
+        {picked ? t.idChecked : t.idTakePhoto}
         <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => setPicked(!!e.target.files?.length)} />
       </label>
-      <p className="rounded-xl bg-warn-soft px-4 py-3 text-[13px] text-warn">
-        Démonstration : la photo n&apos;est ni envoyée ni conservée. En production, cette étape est réalisée par le prestataire
-        de signature certifié.
-      </p>
+      <p className="rounded-xl bg-warn-soft px-4 py-3 text-[13px] text-warn">{t.idDemo}</p>
       {error && (
         <p role="alert" className="rounded-xl bg-warn-soft px-4 py-3 text-[14px] text-warn">
           {error}
@@ -588,10 +584,10 @@ function IdStep(p: {
       )}
       <StickyBar>
         <Button variant="secondary" onClick={p.onBack} className="h-13">
-          Retour
+          {t.back}
         </Button>
         <Button className="h-13 flex-1" disabled={!picked || pending} onClick={next}>
-          {pending ? "Préparation…" : "Recevoir mon code de signature"}
+          {pending ? t.preparing : t.getSigningCode}
         </Button>
       </StickyBar>
     </section>
@@ -600,7 +596,7 @@ function IdStep(p: {
 
 // ---------------------------------------------------------------------------
 
-function OtpStep({ token, info, demoMode }: { token: string; info: OtpInfo; demoMode: boolean }) {
+function OtpStep({ token, t, info, demoMode }: { token: string; t: PatientText; info: OtpInfo; demoMode: boolean }) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [demo, setDemo] = useState(info.demoCode);
@@ -624,7 +620,7 @@ function OtpStep({ token, info, demoMode }: { token: string; info: OtpInfo; demo
       const res = await resendOtp(token);
       if (res.ok) {
         setDemo(res.demoCode);
-        setNotice("Un nouveau code vient d'être envoyé.");
+        setNotice(t.newCodeSent);
       } else setError(res.error);
     });
   }
@@ -632,16 +628,16 @@ function OtpStep({ token, info, demoMode }: { token: string; info: OtpInfo; demo
   return (
     <form onSubmit={confirm} className="flex flex-col gap-4">
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold outline-none">
-        Code de confirmation
+        {t.otpTitle}
       </h1>
-      <p className="text-[15px] leading-relaxed text-ink-2">Nous avons envoyé un code à 6 chiffres {info.sentTo}.</p>
+      <p className="text-[15px] leading-relaxed text-ink-2">{t.otpSent(info.sentTo)}</p>
       {demoMode && demo && (
         <p className="rounded-xl bg-brand-soft px-4 py-3 text-[14px]">
-          Mode démonstration : votre code est <strong className="tabular-nums tracking-widest">{demo}</strong>
+          {t.demoCode} <strong className="tabular-nums tracking-widest">{demo}</strong>
         </p>
       )}
       <label className="flex flex-col gap-2 text-[15px] font-semibold">
-        Code de signature
+        {t.signingCode}
         <input
           className="h-14 rounded-xl border border-line-strong bg-white text-center text-2xl font-semibold tracking-[0.5em] tabular-nums"
           inputMode="numeric"
@@ -662,10 +658,10 @@ function OtpStep({ token, info, demoMode }: { token: string; info: OtpInfo; demo
         </p>
       )}
       <Button type="submit" className="h-13" disabled={code.length !== 6 || pending}>
-        {pending ? "Signature…" : "Valider et signer"}
+        {pending ? t.signing : t.validateAndSign}
       </Button>
       <button type="button" onClick={resend} disabled={pending} className="min-h-11 self-start text-[15px] font-medium text-brand underline-offset-2 hover:underline">
-        Renvoyer le code
+        {t.resendCode}
       </button>
     </form>
   );

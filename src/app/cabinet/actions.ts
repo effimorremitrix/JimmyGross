@@ -1,12 +1,13 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { audit } from "@/lib/audit";
 import { requireStaff } from "@/lib/auth";
 import { parisToUtc } from "@/lib/dates";
+import { isLocale, translationProblems, type Locale } from "@/domain/i18n";
 import { isTerminal } from "@/domain/status";
 import { deliveryLabel, patientLink, rotateToken, sendNow } from "@/server/consent";
 import { createConsentRequest, upsertPatient } from "@/server/requests";
@@ -25,6 +26,7 @@ const createSchema = z
     visitReasonId: z.string().uuid("Choisissez un motif"),
     location: z.string().trim().max(120),
     channel: z.enum(["sms", "email", "sms_email", "manual_link"]),
+    locale: z.string().refine(isLocale, "Langue inconnue"),
   })
   .superRefine((v, ctx) => {
     if (v.channel.startsWith("sms") && !v.phone) ctx.addIssue({ code: "custom", path: ["phone"], message: "Mobile requis pour l'envoi par SMS" });
@@ -78,6 +80,7 @@ export async function createRequest(_: CreateState | undefined, form: FormData):
       location: v.location,
       channel: v.channel,
       sendMode: v.channel === "manual_link" ? "none" : "now",
+      locale: v.locale as Locale,
     });
     revalidatePath("/cabinet");
     return {
@@ -189,6 +192,49 @@ export async function reviewAllFlags(requestId: string): Promise<void> {
   await db.update(schema.precheckFlags).set({ reviewedAt: new Date(), reviewedById: staff.userId }).where(inArray(schema.precheckFlags.id, ids));
   await audit({ practiceId: r.practiceId, requestId: r.id, actor: `user:${staff.userId}`, type: "flag.reviewed", data: { count: ids.length } });
   revalidatePath("/cabinet");
+}
+
+/**
+ * Sets the language the patient gets (messages, screens, document) until they give
+ * consent. Without an approved translation the patient still gets French.
+ */
+export async function setRequestLanguage(requestId: string, form: FormData): Promise<void> {
+  const staff = await requireStaff();
+  const locale = form.get("locale");
+  if (!isLocale(locale)) return;
+  const r = await ownedRequest(staff.practiceId, requestId);
+  if (!r || isTerminal(r.status) || r.patientAckAt || r.locale === locale) return;
+  await db.update(schema.consentRequests).set({ locale, updatedAt: new Date() }).where(eq(schema.consentRequests.id, r.id));
+  await db.update(schema.patients).set({ preferredLocale: locale }).where(eq(schema.patients.id, r.patientId));
+  await audit({ practiceId: r.practiceId, requestId: r.id, actor: `user:${staff.userId}`, type: "request.language_changed", data: { from: r.locale, to: locale } });
+  revalidatePath(`/cabinet/demandes/${r.id}`);
+}
+
+/**
+ * The practitioner approves a translation after reading it side by side with the
+ * French. Only complete translations can be approved; once approved, it is frozen.
+ */
+export async function approveTranslation(translationId: string): Promise<void> {
+  const staff = await requireStaff();
+  if (staff.role !== "practitioner") return;
+  const tr = await db.query.templateTranslations.findFirst({ where: eq(schema.templateTranslations.id, translationId) });
+  if (!tr || tr.approvedAt) return;
+  const v = await db.query.templateVersions.findFirst({ where: eq(schema.templateVersions.id, tr.templateVersionId) });
+  if (!v) return;
+  const t = await db.query.templates.findFirst({ where: and(eq(schema.templates.id, v.templateId), eq(schema.templates.practiceId, staff.practiceId)) });
+  if (!t) return;
+  if (translationProblems(v, tr.content).length) return;
+  await db
+    .update(schema.templateTranslations)
+    .set({ approvedAt: new Date(), approvedById: staff.userId })
+    .where(and(eq(schema.templateTranslations.id, tr.id), isNull(schema.templateTranslations.approvedAt)));
+  await audit({
+    practiceId: staff.practiceId,
+    actor: `user:${staff.userId}`,
+    type: "template.translation_approved",
+    data: { versionId: v.id, version: v.version, locale: tr.locale },
+  });
+  revalidatePath("/cabinet/modeles");
 }
 
 /** The practitioner approves the patient-facing summaries of a template version. */

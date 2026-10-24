@@ -17,7 +17,9 @@ import type {
   PrecheckAnswers,
   Question,
   SignatureLevel,
+  TemplateTranslation,
 } from "@/domain/types";
+import type { Locale } from "@/domain/i18n";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -108,6 +110,25 @@ export const templateVersions = pgTable(
   (t) => [uniqueIndex("template_versions_uq").on(t.templateId, t.version)],
 );
 
+/**
+ * A template version's patient-facing text in another language. Patients see it
+ * only once the practitioner has approved it; approved translations never change
+ * (a correction means a new template version), so a proof always shows what was read.
+ */
+export const templateTranslations = pgTable(
+  "template_translations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    templateVersionId: uuid("template_version_id").notNull().references(() => templateVersions.id),
+    locale: text("locale").$type<Locale>().notNull(),
+    content: jsonb("content").$type<TemplateTranslation>().notNull(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedById: uuid("approved_by_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("template_translations_uq").on(t.templateVersionId, t.locale)],
+);
+
 /** Maps a Doctolib visit reason ("motif") to a template and a prefilled act. */
 export const visitReasons = pgTable("visit_reasons", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -127,6 +148,8 @@ export const patients = pgTable("patients", {
   birthDate: text("birth_date"),
   phone: text("phone"),
   email: text("email"),
+  /** Language last chosen for or by this patient; new requests start in it. */
+  preferredLocale: text("preferred_locale").$type<Locale>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -159,6 +182,8 @@ export const consentRequests = pgTable(
     signatureLevel: signatureLevelEnum("signature_level").$type<SignatureLevel>().notNull(),
     plannedAct: text("planned_act").notNull(),
     plannedLocation: text("planned_location").notNull().default(""),
+    /** Language requested for the patient (messages, screens, document). French unless set. */
+    locale: text("locale").$type<Locale>().notNull().default("fr"),
     /** sha256 of the link token; the token itself is never stored. */
     tokenHash: text("token_hash").notNull(),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }).notNull(),

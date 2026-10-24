@@ -1,6 +1,8 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { ConsentBlock, InfoSection, PrecheckAnswers, Question } from "@/domain/types";
 import { applicableQuestions } from "@/domain/precheck";
+import { DEFAULT_LOCALE, LOCALE_LABEL_FR, LOCALE_TAG, type Locale } from "@/domain/i18n";
+import { patientText } from "@/i18n/patient";
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGIN = 50;
@@ -110,13 +112,20 @@ export interface ConsentPdfInput {
   consent: ConsentBlock;
   questions: Question[];
   patient: { firstName: string; lastName: string; birthDate: string | null; phone: string | null };
+  /** As the patient reads it (translated when applicable). */
   plannedAct: string;
+  /** The French act, which the questions' act keywords match. Defaults to plannedAct. */
+  actKey?: string;
   plannedLocation: string;
   appointmentAt: Date;
   answers: PrecheckAnswers;
   ackAt: Date;
   signaturePng: Uint8Array | null;
   requestId: string;
+  /** Language of the document; French when omitted. Template fields above must already be in it. */
+  locale?: Locale;
+  /** Set when the text is a translation: who approved it and when. */
+  translation?: { approvedAt: Date; approvedBy: string } | null;
 }
 
 /** Signature box in Yousign coordinates: points from the top-left of the page. */
@@ -129,15 +138,20 @@ export interface SignatureBox {
 }
 
 export function frDate(d: Date): string {
-  return new Intl.DateTimeFormat("fr-FR", {
+  return longDate(d, "fr");
+}
+
+/** Long date and time in Paris, written in the given language. */
+export function longDate(d: Date, locale: Locale): string {
+  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
     dateStyle: "long",
     timeStyle: "short",
     timeZone: "Europe/Paris",
   }).format(d);
 }
 
-export function frBirthDate(iso: string | null): string {
-  if (!iso) return "non renseignée";
+export function frBirthDate(iso: string | null, unknown = "non renseignée"): string {
+  if (!iso) return unknown;
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -150,23 +164,31 @@ export async function buildConsentPdf(
   input: ConsentPdfInput,
   opts: { infoOnly?: boolean } = {},
 ): Promise<{ bytes: Uint8Array; box: SignatureBox }> {
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const t = patientText(locale);
+  const date = (d: Date) => longDate(d, locale);
   const doc = await PDFDocument.create();
   doc.setTitle(pdfSafe(`${input.templateTitle} - ${input.patient.lastName.toUpperCase()} ${input.patient.firstName}`));
   doc.setAuthor(pdfSafe(input.practitionerName));
   doc.setSubject(`Consentza request ${input.requestId}`);
-  doc.setLanguage("fr-FR");
+  doc.setLanguage(LOCALE_TAG[locale]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const w = new Writer(
     doc,
     font,
     bold,
-    `${input.practitionerName} - ${input.templateTitle} - modèle v${input.templateVersion} - réf. ${input.requestId.slice(0, 8)}`,
+    t.pdfFooter(input.practitionerName, input.templateTitle, input.templateVersion, input.requestId.slice(0, 8)),
   );
 
   w.text(input.practiceName, { size: 9, color: MUTED, gap: 10 });
   w.text(input.templateTitle.toUpperCase(), { size: 15, bold: true, color: ACCENT, gap: 2 });
   if (input.templateSubtitle) w.text(input.templateSubtitle, { size: 10, bold: true, gap: 10 });
+  if (input.translation) {
+    // Bilingual on purpose: the patient and the French practice both read it.
+    w.text(translationNote(locale, input.translation, input.templateVersion), { size: 8.5, color: MUTED, gap: 1 });
+    w.text(translationNote(DEFAULT_LOCALE, input.translation, input.templateVersion, locale), { size: 8.5, color: MUTED, gap: 10 });
+  }
   for (const p of input.intro) w.text(`• ${p}`, { size: 9.5, indent: 4, gap: 2 });
   w.space(8);
 
@@ -186,21 +208,21 @@ export async function buildConsentPdf(
 
   // ---- Consent page ----
   w.newPage();
-  w.text("CONSENTEMENT DU PATIENT", { size: 13, bold: true, color: ACCENT, gap: 10 });
+  w.text(t.pdfConsentTitle, { size: 13, bold: true, color: ACCENT, gap: 10 });
   const p = input.patient;
-  w.text(`Je soussigné(e) : ${p.firstName} ${p.lastName.toUpperCase()}`, { size: 10.5, gap: 2 });
-  w.text(`Né(e) le : ${frBirthDate(p.birthDate)}${p.phone ? `    Téléphone : ${p.phone}` : ""}`, { size: 10.5, gap: 10 });
+  w.text(`${t.pdfUndersigned} ${p.firstName} ${p.lastName.toUpperCase()}`, { size: 10.5, gap: 2 });
+  w.text(`${t.pdfBornOn} ${frBirthDate(p.birthDate, t.pdfBirthUnknown)}${p.phone ? `    ${t.pdfPhone} ${p.phone}` : ""}`, { size: 10.5, gap: 10 });
   for (const s of input.consent.statement) w.text(s, { size: 10, gap: 6 });
   w.space(4);
-  w.text(`Geste consenti : ${input.plannedAct}`, { size: 10.5, bold: true, gap: 2 });
-  if (input.plannedLocation) w.text(`Localisation prévue : ${input.plannedLocation}`, { size: 10.5, gap: 2 });
-  w.text(`Rendez-vous : ${frDate(input.appointmentAt)}`, { size: 10.5, gap: 2 });
-  w.text(`Consentement exprimé le : ${frDate(input.ackAt)}`, { size: 10.5, gap: 12 });
+  w.text(`${t.pdfAct} ${input.plannedAct}`, { size: 10.5, bold: true, gap: 2 });
+  if (input.plannedLocation) w.text(`${t.pdfLocation} ${input.plannedLocation}`, { size: 10.5, gap: 2 });
+  w.text(`${t.pdfAppointment} ${date(input.appointmentAt)}`, { size: 10.5, gap: 2 });
+  w.text(`${t.pdfConsentAt} ${date(input.ackAt)}`, { size: 10.5, gap: 12 });
 
-  w.text("Questionnaire avant le geste", { size: 11, bold: true, color: ACCENT, gap: 4 });
-  for (const q of applicableQuestions(input.questions, input.plannedAct)) {
+  w.text(t.pdfPrecheck, { size: 11, bold: true, color: ACCENT, gap: 4 });
+  for (const q of applicableQuestions(input.questions, input.actKey ?? input.plannedAct)) {
     const a = input.answers.items[q.id];
-    const ans = a ? (a.answer === "oui" ? "OUI" : "Non") : "-";
+    const ans = a ? (a.answer === "oui" ? t.pdfYes : t.pdfNo) : "-";
     w.text(`${q.text}  ->  ${ans}${a?.detail ? ` (${a.detail})` : ""}`, {
       size: 9,
       bold: a?.answer === "oui",
@@ -210,14 +232,14 @@ export async function buildConsentPdf(
   const ec = input.answers.emergencyContact;
   if (ec?.name) {
     w.space(6);
-    w.text(`Personne à contacter : ${ec.name}${ec.relation ? ` (${ec.relation})` : ""} - ${ec.phone}`, { size: 9.5 });
+    w.text(`${t.pdfEmergency} ${ec.name}${ec.relation ? ` (${ec.relation})` : ""} - ${ec.phone}`, { size: 9.5 });
   }
 
   // ---- Signature box ----
   const boxH = 110;
   w.ensure(boxH + 40);
   w.space(10);
-  w.text("Signature du patient", { size: 10, bold: true, gap: 4 });
+  w.text(t.pdfSignature, { size: 10, bold: true, gap: 4 });
   const boxW = 260;
   const boxX = MARGIN;
   const boxBottom = w.y - boxH;
@@ -230,14 +252,14 @@ export async function buildConsentPdf(
     w.page.drawImage(img, { x: boxX + (boxW - iw) / 2, y: boxBottom + (boxH - ih) / 2, width: iw, height: ih });
   }
   // The provider stamps its certified signature in the box on the right.
-  w.page.drawText(pdfSafe("Signature électronique certifiée"), {
+  w.page.drawText(pdfSafe(t.pdfCertified), {
     x: boxX + boxW + 20,
     y: boxBottom + boxH - 12,
     size: 9,
     font,
     color: MUTED,
   });
-  w.page.drawText(pdfSafe("Le geste réalisé est confirmé par le médecin le jour de l'acte."), {
+  w.page.drawText(pdfSafe(t.pdfConfirmedOnDay), {
     x: boxX,
     y: boxBottom - 14,
     size: 8.5,
@@ -255,6 +277,21 @@ export async function buildConsentPdf(
   w.y = boxBottom - 24;
 
   return { bytes: await doc.save(), box };
+}
+
+/** The "approved translation" line, written in `lang`, about a document in `docLocale`. */
+function translationNote(
+  lang: Locale,
+  tr: { approvedAt: Date; approvedBy: string },
+  version: number,
+  docLocale: Locale = lang,
+): string {
+  const day = new Intl.DateTimeFormat(LOCALE_TAG[lang], { dateStyle: "long", timeZone: "Europe/Paris" }).format(tr.approvedAt);
+  const by = tr.approvedBy || (lang === "fr" ? "le praticien" : "the practitioner");
+  if (lang === "fr") {
+    return `Traduction en ${LOCALE_LABEL_FR[docLocale]} validée par ${by} le ${day}. Texte de référence : original français, modèle v${version}.`;
+  }
+  return `Translation approved by ${by} on ${day}. Reference text: French original, template v${version}.`;
 }
 
 export interface SealInput {
@@ -306,6 +343,8 @@ export interface EvidenceInput {
   templateTitle: string;
   templateVersion: number;
   requestId: string;
+  /** Language the patient was given; omitted or French means the original text. */
+  language?: { effective: Locale; approvedAt: Date | null; approvedBy: string | null };
   signedSha256: string | null;
   sections: { title: string; visibleMs: number; acknowledgedAt: Date | null; fullTextOpenedAt: Date | null }[];
   fullDocumentOpenedAt?: Date | null;
@@ -325,6 +364,14 @@ export async function buildEvidencePdf(e: EvidenceInput): Promise<Uint8Array> {
   w.text("DOSSIER DE PREUVE D'INFORMATION ET DE CONSENTEMENT", { size: 13, bold: true, color: ACCENT, gap: 6 });
   w.text(`Patient : ${e.patientName}`, { size: 10.5, gap: 2 });
   w.text(`Document : ${e.templateTitle} (modèle v${e.templateVersion})`, { size: 10.5, gap: 2 });
+  if (e.language && e.language.effective !== DEFAULT_LOCALE) {
+    const by = e.language.approvedBy ? ` par ${e.language.approvedBy}` : "";
+    const at = e.language.approvedAt ? ` le ${frDate(e.language.approvedAt)}` : "";
+    w.text(`Langue du patient : ${LOCALE_LABEL_FR[e.language.effective]} (traduction validée${by}${at} ; texte de référence : original français)`, {
+      size: 10.5,
+      gap: 2,
+    });
+  }
   if (e.signedSha256) w.text(`Empreinte SHA-256 du document signé : ${e.signedSha256}`, { size: 9, gap: 2 });
   w.space(8);
 

@@ -25,7 +25,7 @@ export class MockProvider implements SignatureProvider {
   }
 
   async sendOtp(ref: ProviderRef) {
-    const { code, sentTo } = await issueOtp(ref.requestId, "sign", ref);
+    const { code, sentTo } = await issueOtp(ref.requestId, "sign", ref, ref.locale);
     return { sentTo, ...(config().DEMO_MODE ? { demoCode: code } : {}) };
   }
 
