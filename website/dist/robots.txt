@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://eclaira.pages.dev/sitemap.xml
