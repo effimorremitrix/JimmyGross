@@ -55,3 +55,21 @@ export type RequestStatus =
   | "signed"
   | "expired"
   | "cancelled";
+
+/**
+ * Patient-facing text of a template version in another language, keyed by the
+ * source ids. Lists match the French source item for item.
+ */
+export interface TemplateTranslation {
+  title: string;
+  subtitle: string;
+  intro: string[];
+  sections: Record<
+    string,
+    { title: string; summary: string[]; paragraphs: string[]; callouts?: { heading: string; items: string[] }[] }
+  >;
+  consentStatement: string[];
+  questions: Record<string, { text: string; detailPrompt?: string; patientNotice?: string }>;
+  /** French act label (as in visit reasons and act options) → translated label. */
+  acts?: Record<string, string>;
+}

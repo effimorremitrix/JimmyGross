@@ -1,5 +1,6 @@
 import "server-only";
 import { db, schema } from "@/db";
+import { isLocale, LOCALE_LABEL_FR } from "@/domain/i18n";
 import { requestMeta } from "./request-meta";
 
 export type AuditActor = "patient" | "system" | "provider" | `user:${string}`;
@@ -7,7 +8,7 @@ export type AuditActor = "patient" | "system" | "provider" | `user:${string}`;
 /**
  * Appends one event to the evidence log. The database chains it to the
  * previous event of the practice (sha256) and rejects any later UPDATE or
- * DELETE; see drizzle/0002_evidence_integrity.sql.
+ * DELETE; see drizzle/0003_evidence_integrity.sql.
  */
 export async function audit(params: {
   practiceId: string;
@@ -46,6 +47,9 @@ export const AUDIT_LABEL: Record<string, string> = {
   "request.scheduled": "Envoi programmé",
   "request.imported": "Créée depuis l'agenda importé",
   "template.summaries_approved": "Résumés validés par le médecin",
+  "template.translation_approved": "Traduction validée par le médecin",
+  "patient.language_changed": "Langue changée par le patient",
+  "request.language_changed": "Langue du patient changée par le cabinet",
   "patient.precheck_submitted": "Questionnaire envoyé",
   "patient.consent_given": "Consentement exprimé et signature tracée",
   "signature.otp_sent": "Code de signature envoyé",
@@ -59,3 +63,13 @@ export const AUDIT_LABEL: Record<string, string> = {
   "act.confirmed": "Geste confirmé par le médecin",
   "document.downloaded": "Document téléchargé",
 };
+
+/** Short French detail shown next to an event's label (language changes, confirmed act). */
+export function auditDetail(type: string, data: Record<string, unknown>): string {
+  const lang = (x: unknown) => (isLocale(x) ? LOCALE_LABEL_FR[x] : String(x ?? ""));
+  if (type === "patient.language_changed" || type === "request.language_changed") return `${lang(data.from)} → ${lang(data.to)}`;
+  if (type === "template.translation_approved") return lang(data.locale);
+  if (type === "act.confirmed") return String(data.act ?? "");
+  if ((type === "request.sent" || type === "patient.consent_given") && isLocale(data.locale) && data.locale !== "fr") return `en ${lang(data.locale)}`;
+  return "";
+}

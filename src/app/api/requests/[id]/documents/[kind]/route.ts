@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { audit, AUDIT_LABEL } from "@/lib/audit";
+import { audit, AUDIT_LABEL, auditDetail } from "@/lib/audit";
 import { getStaff } from "@/lib/auth";
 import { buildEvidencePdf } from "@/lib/pdf";
 import { latestDocument } from "@/server/consent";
@@ -34,6 +34,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/requests/[id]/d
       templateTitle: d.version.title,
       templateVersion: d.version.version,
       requestId: d.request.id,
+      language: d.language,
       signedSha256: signed?.sha256 ?? null,
       fullDocumentOpenedAt: d.events.find((e) => e.type === "patient.full_document_opened")?.at ?? null,
       sections: d.version.sections.map((s) => {
@@ -48,7 +49,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/requests/[id]/d
         label: AUDIT_LABEL[e.type] ?? e.type,
         actor: e.actor.startsWith("user:") ? users.find((u) => `user:${u.id}` === e.actor)?.name ?? "cabinet" : e.actor,
         ip: e.ip,
-        details: e.type === "act.confirmed" ? String((e.data as { act?: string }).act ?? "") : "",
+        details: auditDetail(e.type, e.data),
       })),
     });
     filename = `preuve-${name}.pdf`;

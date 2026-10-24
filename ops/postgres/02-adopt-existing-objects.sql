@@ -1,4 +1,4 @@
--- Only for a database migrated BEFORE migration 0003 under another role (for
+-- Only for a database migrated BEFORE migration 0004 under another role (for
 -- example a local volume created with the "consentza" superuser). Run as that
 -- role or a superuser, after 01-create-roles.sql, then run npm run db:migrate
 -- with DATABASE_OWNER_URL. A fresh database does not need this.

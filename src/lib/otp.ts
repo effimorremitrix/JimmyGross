@@ -1,6 +1,8 @@
 import "server-only";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { DEFAULT_LOCALE, type Locale } from "@/domain/i18n";
+import { patientText } from "@/i18n/patient";
 import { newOtp, safeEqualHex, sha256 } from "./crypto";
 import { emailSender, maskEmail } from "./email";
 import { maskPhone, smsSender } from "./sms";
@@ -13,12 +15,14 @@ export type OtpCheck = { ok: true } | { ok: false; reason: "bad_otp" | "expired"
 
 /**
  * Creates a 6-digit code (hash stored), sends it by SMS, or by e-mail when there
- * is no phone, and returns where it went. Previous unused codes are voided.
+ * is no phone, and returns where it went (in the patient's language). Previous
+ * unused codes are voided.
  */
 export async function issueOtp(
   requestId: string,
   purpose: OtpPurpose,
   to: { phone: string | null; email: string | null },
+  locale: Locale = DEFAULT_LOCALE,
 ): Promise<{ code: string; sentTo: string }> {
   const code = newOtp();
   await db
@@ -26,15 +30,15 @@ export async function issueOtp(
     .set({ usedAt: new Date() })
     .where(and(eq(schema.otpChallenges.requestId, requestId), eq(schema.otpChallenges.purpose, purpose), isNull(schema.otpChallenges.usedAt)));
   await db.insert(schema.otpChallenges).values({ requestId, purpose, codeHash: sha256(code), expiresAt: new Date(Date.now() + TTL_MS) });
-  const what = purpose === "sign" ? "de signature" : "d'accès";
+  const t = patientText(locale);
   if (to.phone) {
-    await smsSender().send(to.phone, `Éclaira : votre code ${what} est ${code}. Il expire dans 10 minutes.`);
-    return { code, sentTo: `au ${maskPhone(to.phone)}` };
+    await smsSender().send(to.phone, t.codeSms(purpose, code));
+    return { code, sentTo: t.toPhone(maskPhone(to.phone)) };
   }
   if (to.email) {
-    const text = `Votre code ${what} est ${code}. Il expire dans 10 minutes.`;
-    await emailSender().send(to.email, `Votre code ${what}`, text, `<p style="font-family:Arial,sans-serif">${text}</p>`);
-    return { code, sentTo: `à l'adresse ${maskEmail(to.email)}` };
+    const text = t.codeEmailText(purpose, code);
+    await emailSender().send(to.email, t.codeEmailSubject(purpose), text, `<p style="font-family:Arial,sans-serif">${text}</p>`);
+    return { code, sentTo: t.toEmail(maskEmail(to.email)) };
   }
   throw new Error("Aucun moyen de contact pour envoyer le code.");
 }

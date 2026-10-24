@@ -15,6 +15,7 @@ First practice: **Dr Jimmy Gross** (rhumatologie interventionnelle), template *I
 | **Pre-Check flags** | "Oui" answers on risky questions (anticoagulant, infection, pregnancy...) become alerts on the dashboard before the act | `src/domain/precheck.ts` |
 | **Signature** | eIDAS provider behind one interface: `mock` (demo) or Yousign v3 (SES with our own OTP screens, AES hosted by Yousign) | `src/lib/signature` |
 | **Summary approval** | Patients see summaries only after the practitioner approves them on the Modèles page; until then the full text is shown | `/cabinet/modeles` |
+| **Languages** | French by default. A template version can carry translations (English today); the practitioner reads each one side by side with the French and approves it before any patient sees it. The practice picks the patient's language per request (remembered for the next one), and the patient can switch until they consent. SMS, e-mail, screens, codes and the signed PDF follow; the PDF states who approved the translation and that the French original is the reference. Alerts and the practice screens stay French | `src/domain/i18n.ts`, `src/i18n/patient.ts`, `template_translations` |
 | **Consent Vault** | Unsigned + signed PDFs with SHA-256, provider audit trail, append-only event log, "dossier de preuve" PDF | `documents`, `audit_events` |
 | **Dashboard** | Day view, KPIs, alerts, reminders, new links, detail with evidence, doctor's act confirmation | `/cabinet` |
 
@@ -42,10 +43,10 @@ Demo login: `dr.gross@demo.eclaira.fr` / `eclaira-demo` (practitioner) or `secre
 ```bash
 npm test                        # domain unit tests (Pre-Check rules, status machine, dates, crypto, PDF text)
 npm run build && npm start      # then, with seeded data:
-CHROME_PATH=... PATIENT_LINK=... AES_LINK=... npm run test:e2e
+CHROME_PATH=... PATIENT_LINK=... AES_LINK=... EN_LINK=... npm run test:e2e
 ```
 
-The end-to-end test drives both patient flows (SES and AES), the dashboard, PDF downloads, act confirmation, request creation, link lockout, and runs an axe WCAG 2.2 AA scan on every screen (fails on critical or serious issues). It also covers summaries and full text, summary approval, the agenda import (preview, motif mapping, duplicates, landlines, scheduling), the scheduler endpoint, and access by code. Last run: 66/66 checks passed; 37 unit tests.
+The end-to-end test drives both patient flows (SES and AES), the dashboard, PDF downloads, act confirmation, request creation, link lockout, and runs an axe WCAG 2.2 AA scan on every screen (fails on critical or serious issues). It also covers summaries and full text, summary approval, the agenda import (preview, motif mapping, duplicates, landlines, scheduling), the scheduler endpoint, access by code, approval of the English translation, and the full flow in English (`EN_LINK`, the seeded patient Emma Wilson) with language switching. Last run: 88/88 checks passed; 48 unit tests.
 
 ## Going live (not done yet)
 

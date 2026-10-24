@@ -43,10 +43,10 @@ GRANT USAGE ON SCHEMA public TO eclaira_app;--> statement-breakpoint
 -- 4. Tables. Start from nothing, so re-running also removes anything granted by hand.
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM eclaira_app;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO eclaira_app;--> statement-breakpoint
--- Evidence: append and read only. The triggers of 0002 reject the rest for
+-- Evidence: append and read only. The triggers of 0003 reject the rest for
 -- every role; these grants make the app fail earlier, on permissions.
 REVOKE UPDATE, DELETE ON "audit_events", "precheck_submissions" FROM eclaira_app;--> statement-breakpoint
--- Flags are reviewed and superseded (UPDATE) but never deleted, as in 0002.
+-- Flags are reviewed and superseded (UPDATE) but never deleted, as in 0003.
 REVOKE DELETE ON "precheck_flags" FROM eclaira_app;--> statement-breakpoint
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM eclaira_app;--> statement-breakpoint
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO eclaira_app;--> statement-breakpoint

@@ -1,3 +1,4 @@
+import type { Locale } from "@/domain/i18n";
 import type { SignatureLevel } from "@/domain/types";
 import type { SignatureBox } from "@/lib/pdf";
 
@@ -10,6 +11,8 @@ export interface StartInput {
   box: SignatureBox;
   /** Where the provider sends the patient back after hosted (AES) signing. */
   returnUrl: string;
+  /** Language of the provider's own screens and messages. */
+  locale: Locale;
 }
 
 export type StartResult =
@@ -25,6 +28,8 @@ export interface ProviderRef {
   documentId: string;
   phone: string | null;
   email: string | null;
+  /** Language for the codes the provider sends and for `sentTo`. */
+  locale: Locale;
 }
 
 export type SignResult = { ok: true } | { ok: false; reason: "bad_otp" | "expired" | "too_many_attempts" };

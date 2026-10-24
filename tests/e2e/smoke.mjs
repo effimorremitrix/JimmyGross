@@ -1,6 +1,8 @@
 /**
  * End-to-end smoke test against a running server with seeded demo data.
- *   BASE_URL=http://localhost:3000 PATIENT_LINK=... AES_LINK=... node tests/e2e/smoke.mjs
+ *   BASE_URL=http://localhost:3000 PATIENT_LINK=... AES_LINK=... EN_LINK=... node tests/e2e/smoke.mjs
+ * EN_LINK is the seeded English-speaking patient (Emma Wilson); it runs after the
+ * doctor approves the English translation.
  * Requires DEMO_MODE=true (the SMS code is read from the screen) and the mock provider.
  * Also runs an axe accessibility scan on every screen (fails on critical/serious).
  */
@@ -33,31 +35,54 @@ async function drawSignature(page) {
   await page.mouse.up();
 }
 
-async function patientFlow(browser, link, dob, { aes = false, yesAnticoag = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: "fr-FR" });
+/** Patient screen labels per language, so one flow drives both. */
+const L = {
+  fr: {
+    day: "Jour", month: "Mois", year: "Année", cont: "Continuer", start: "Commencer", info: "Fiche d'information",
+    readFull: "Lire le texte complet de cette partie", fullText: /Une infiltration peut être proposée pour une douleur articulaire/,
+    fullDoc: /Lire le document complet/, ack: "J'ai lu cette partie", read: "Lu", precheck: "Questionnaire avant le geste",
+    anticoag: "anticoagulant ou antiagrégant", yes: "Oui", no: "Non", drug: "Nom du traitement", consent: "Votre consentement",
+    idCheck: "Vérification d'identité", getCode: "Recevoir mon code de signature", otp: "Code de confirmation",
+    signingCode: "Code de signature", sign: "Valider et signer", badCode: "Code incorrect", signed: /C'est signé/,
+  },
+  en: {
+    day: "Day", month: "Month", year: "Year", cont: "Continue", start: "Start", info: "Information sheet",
+    readFull: "Read the full text of this part", fullText: /An injection may be offered for joint, tendon/,
+    fullDoc: /Read the full document/, ack: "I have read this part", read: "Read", precheck: "Questionnaire before the procedure",
+    anticoag: "anticoagulant or antiplatelet", yes: "Yes", no: "No", drug: "Name of the treatment", consent: "Your consent",
+    idCheck: "Identity check", getCode: "Get my signing code", otp: "Confirmation code",
+    signingCode: "Signing code", sign: "Confirm and sign", badCode: "Incorrect code", signed: /Signed, thank you/,
+  },
+};
+
+async function patientFlow(browser, link, dob, { aes = false, yesAnticoag = false, lang = "fr", before } = {}) {
+  const t = L[lang];
+  const tag = lang === "fr" ? "" : ` ${lang}`;
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: lang === "fr" ? "fr-FR" : "en-GB" });
   const page = await ctx.newPage();
   await page.goto(link);
-  await scan(page, `patient identity (${aes ? "AES" : "SES"})`);
+  await scan(page, `patient identity (${aes ? "AES" : "SES"}${tag})`);
+  if (before) await before(page);
   const [y, m, d] = dob.split("-");
-  await page.getByLabel("Jour").fill(d);
-  await page.getByLabel("Mois").fill(m);
-  await page.getByLabel("Année").fill(y);
-  await page.getByRole("button", { name: "Continuer" }).click();
-  await page.getByRole("button", { name: "Commencer" }).waitFor();
-  await scan(page, "patient welcome");
-  await page.getByRole("button", { name: "Commencer" }).click();
+  await page.getByLabel(t.day).fill(d);
+  await page.getByLabel(t.month).fill(m);
+  await page.getByLabel(t.year).fill(y);
+  await page.getByRole("button", { name: t.cont }).click();
+  await page.getByRole("button", { name: t.start }).waitFor();
+  await scan(page, `patient welcome${tag}`);
+  await page.getByRole("button", { name: t.start }).click();
 
-  await page.getByRole("heading", { name: "Fiche d'information" }).waitFor();
-  await scan(page, "patient info sheet");
-  ok("summary shown with full text one tap away", (await page.getByText("Lire le texte complet de cette partie").count()) >= 9);
-  await page.getByText("Lire le texte complet de cette partie").first().click();
-  await page.getByText(/Une infiltration peut être proposée pour une douleur articulaire/).waitFor();
-  ok("full original text expands", true);
-  await scan(page, "patient info sheet (full text open)");
-  const docHref = await page.getByRole("link", { name: /Lire le document complet/ }).getAttribute("href");
+  await page.getByRole("heading", { name: t.info }).waitFor();
+  await scan(page, `patient info sheet${tag}`);
+  ok(`summary shown with full text one tap away${tag}`, (await page.getByText(t.readFull).count()) >= 9);
+  await page.getByText(t.readFull).first().click();
+  await page.getByText(t.fullText).waitFor();
+  ok(`full original text expands${tag}`, true);
+  await scan(page, `patient info sheet (full text open)${tag}`);
+  const docHref = await page.getByRole("link", { name: t.fullDoc }).getAttribute("href");
   const docRes = await page.request.get(new URL(docHref, BASE).toString());
-  ok("full document PDF for patient", docRes.status() === 200 && (await docRes.body()).subarray(0, 4).toString() === "%PDF");
-  const ackButtons = page.getByRole("button", { name: "J'ai lu cette partie" });
+  ok(`full document PDF for patient${tag}`, docRes.status() === 200 && (await docRes.body()).subarray(0, 4).toString() === "%PDF");
+  const ackButtons = page.getByRole("button", { name: t.ack });
   const n = await ackButtons.count();
   for (let i = 0; i < n; i++) {
     await ackButtons.first().scrollIntoViewIfNeeded();
@@ -65,51 +90,51 @@ async function patientFlow(browser, link, dob, { aes = false, yesAnticoag = fals
     await ackButtons.first().click();
     await page.waitForTimeout(200);
   }
-  ok("all sections acknowledged", (await page.getByRole("button", { name: "Lu" }).count()) === n, `${n} sections`);
-  await page.getByRole("button", { name: "Continuer" }).click();
+  ok(`all sections acknowledged${tag}`, (await page.getByRole("button", { name: t.read, exact: true }).count()) === n, `${n} sections`);
+  await page.getByRole("button", { name: t.cont }).click();
 
-  await page.getByRole("heading", { name: "Questionnaire avant le geste" }).waitFor();
+  await page.getByRole("heading", { name: t.precheck }).waitFor();
   const groups = page.locator("fieldset").filter({ has: page.locator('input[type="radio"]') });
   const g = await groups.count();
   for (let i = 0; i < g; i++) {
     const fs = groups.nth(i);
     const text = (await fs.textContent()) ?? "";
-    if (yesAnticoag && text.includes("anticoagulant ou antiagrégant")) {
-      await fs.getByText("Oui", { exact: true }).click();
-      await fs.getByLabel("Nom du traitement").fill("Kardégic 75 mg");
+    if (yesAnticoag && text.includes(t.anticoag)) {
+      await fs.getByText(t.yes, { exact: true }).click();
+      await fs.getByLabel(t.drug).fill("Kardégic 75 mg");
     } else {
-      await fs.getByText("Non", { exact: true }).click();
+      await fs.getByText(t.no, { exact: true }).click();
     }
   }
-  await scan(page, "patient pre-check");
-  await page.getByRole("button", { name: "Continuer" }).click();
+  await scan(page, `patient pre-check${tag}`);
+  await page.getByRole("button", { name: t.cont }).click();
 
-  await page.getByRole("heading", { name: "Votre consentement" }).waitFor();
+  await page.getByRole("heading", { name: t.consent }).waitFor();
   await page.getByRole("checkbox").check();
   await drawSignature(page);
-  await scan(page, "patient consent");
+  await scan(page, `patient consent${tag}`);
   if (aes) {
-    await page.getByRole("button", { name: "Continuer" }).click();
-    await page.getByRole("heading", { name: "Vérification d'identité" }).waitFor();
+    await page.getByRole("button", { name: t.cont }).click();
+    await page.getByRole("heading", { name: t.idCheck }).waitFor();
     await scan(page, "patient id check (mock AES)");
     await page.locator('input[type="file"]').setInputFiles({ name: "cni.png", mimeType: "image/png", buffer: Buffer.from("fake") });
   }
-  await page.getByRole("button", { name: "Recevoir mon code de signature" }).click();
-  await page.getByRole("heading", { name: "Code de confirmation" }).waitFor();
-  await scan(page, "patient OTP");
+  await page.getByRole("button", { name: t.getCode }).click();
+  await page.getByRole("heading", { name: t.otp }).waitFor();
+  await scan(page, `patient OTP${tag}`);
   const code = (await page.locator("strong.tabular-nums").textContent())?.trim();
-  ok("demo OTP shown", /^\d{6}$/.test(code ?? ""), code);
+  ok(`demo OTP shown${tag}`, /^\d{6}$/.test(code ?? ""), code);
 
-  await page.getByLabel("Code de signature").fill("000000" === code ? "111111" : "000000");
-  await page.getByRole("button", { name: "Valider et signer" }).click();
-  await page.getByText("Code incorrect").waitFor();
-  ok("wrong OTP rejected", true);
+  await page.getByLabel(t.signingCode).fill("000000" === code ? "111111" : "000000");
+  await page.getByRole("button", { name: t.sign }).click();
+  await page.getByText(t.badCode).waitFor();
+  ok(`wrong OTP rejected${tag}`, true);
 
-  await page.getByLabel("Code de signature").fill(code);
-  await page.getByRole("button", { name: "Valider et signer" }).click();
-  await page.getByRole("heading", { name: /C'est signé/ }).waitFor({ timeout: 15000 });
-  ok(`patient signed (${aes ? "AES" : "SES"})`, true);
-  await scan(page, "patient done");
+  await page.getByLabel(t.signingCode).fill(code);
+  await page.getByRole("button", { name: t.sign }).click();
+  await page.getByRole("heading", { name: t.signed }).waitFor({ timeout: 15000 });
+  ok(`patient signed (${aes ? "AES" : "SES"}${tag})`, true);
+  await scan(page, `patient done${tag}`);
   await ctx.close();
 }
 
@@ -179,6 +204,13 @@ async function staffFlow(browser) {
   await page.getByRole("button", { name: "J'ai relu et je valide les résumés" }).click();
   await page.getByText(/Résumés validés le/).waitFor();
   ok("doctor approves summaries", true);
+  ok("English translation pending approval", (await page.getByText(/pour qui cette langue est demandée reçoivent/).count()) === 1);
+  await page.getByText("Relire côte à côte (français / anglais)").click();
+  await page.getByText(/An injection may be offered for joint, tendon/).waitFor();
+  await scan(page, "templates (translation side by side)");
+  await page.getByRole("button", { name: "J'ai relu la traduction en anglais et je la valide" }).click();
+  await page.getByText(/Validée par Dr Jimmy Gross le/).waitFor();
+  ok("doctor approves English translation", true);
 
   // ---- Weekly agenda import ----
   await page.goto(`${BASE}/cabinet/import`);
@@ -224,6 +256,23 @@ try {
   await patientFlow(browser, process.env.PATIENT_LINK, "1978-03-14", { yesAnticoag: true });
   if (process.env.AES_LINK) await patientFlow(browser, process.env.AES_LINK, "1983-08-08", { aes: true });
   const { fresh, hugoLink } = await staffFlow(browser);
+
+  if (process.env.EN_LINK) {
+    await patientFlow(browser, process.env.EN_LINK, "1990-05-12", {
+      lang: "en",
+      yesAnticoag: true,
+      before: async (p) => {
+        ok("English patient lands in English", (await p.getByRole("heading", { name: "Hello Emma" }).count()) === 1);
+        ok("page language is English", (await p.locator("div[lang=en]").count()) >= 1);
+        await p.getByRole("button", { name: "Français" }).click();
+        await p.getByRole("heading", { name: "Bonjour Emma" }).waitFor();
+        ok("patient can switch to French", (await p.getByRole("button", { name: "Français", pressed: true }).count()) === 1);
+        await p.getByRole("button", { name: "English" }).click();
+        await p.getByRole("heading", { name: "Hello Emma" }).waitFor();
+        ok("and back to English", true);
+      },
+    });
+  }
 
   {
     const c = await browser.newContext({ viewport: { width: 390, height: 844 } });

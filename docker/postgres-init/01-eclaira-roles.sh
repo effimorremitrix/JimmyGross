@@ -2,7 +2,7 @@
 # Local development only. Runs once, when the Postgres volume is first created.
 # Creates the two roles of docs/COMPLIANCE.md:
 #   eclaira_owner  owns the database and schema, runs migrations and the demo seed
-#   eclaira_app    the runtime role; migration 0003 gives it its table grants
+#   eclaira_app    the runtime role; migration 0004 gives it its table grants
 # Passwords come from ECLAIRA_OWNER_PASSWORD / ECLAIRA_APP_PASSWORD (docker-compose.yml).
 set -eu
 

@@ -1,5 +1,5 @@
 {
-  "id": "799ab3cd-31b1-40e1-98fb-8faa6cdb028f",
+  "id": "eea516d1-fcb5-4589-842e-17348bf2f3c6",
   "prevId": "8549cfae-da60-4f44-a10f-134d11ad4572",
   "version": "7",
   "dialect": "postgresql",
@@ -170,24 +170,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "chain_seq": {
-          "name": "chain_seq",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "prev_hash": {
-          "name": "prev_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "hash": {
-          "name": "hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -208,27 +190,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "audit_events_chain_uq": {
-          "name": "audit_events_chain_uq",
-          "columns": [
-            {
-              "expression": "practice_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "chain_seq",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -338,6 +299,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'fr'"
         },
         "token_hash": {
           "name": "token_hash",
@@ -915,6 +883,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "preferred_locale": {
+          "name": "preferred_locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1026,12 +1000,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "submission_id": {
-          "name": "submission_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "question_id": {
           "name": "question_id",
           "type": "text",
@@ -1069,43 +1037,9 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "superseded_at": {
-          "name": "superseded_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "superseded_by_submission_id": {
-          "name": "superseded_by_submission_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         }
       },
-      "indexes": {
-        "precheck_flags_request_idx": {
-          "name": "precheck_flags_request_idx",
-          "columns": [
-            {
-              "expression": "request_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "superseded_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "precheck_flags_request_id_consent_requests_id_fk": {
           "name": "precheck_flags_request_id_consent_requests_id_fk",
@@ -1120,119 +1054,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "precheck_flags_submission_id_precheck_submissions_id_fk": {
-          "name": "precheck_flags_submission_id_precheck_submissions_id_fk",
-          "tableFrom": "precheck_flags",
-          "tableTo": "precheck_submissions",
-          "columnsFrom": [
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "precheck_flags_reviewed_by_id_users_id_fk": {
           "name": "precheck_flags_reviewed_by_id_users_id_fk",
           "tableFrom": "precheck_flags",
           "tableTo": "users",
           "columnsFrom": [
             "reviewed_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "precheck_flags_superseded_by_submission_id_precheck_submissions_id_fk": {
-          "name": "precheck_flags_superseded_by_submission_id_precheck_submissions_id_fk",
-          "tableFrom": "precheck_flags",
-          "tableTo": "precheck_submissions",
-          "columnsFrom": [
-            "superseded_by_submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.precheck_submissions": {
-      "name": "precheck_submissions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "seq": {
-          "name": "seq",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "answers": {
-          "name": "answers",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "submitted_at": {
-          "name": "submitted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "precheck_submissions_uq": {
-          "name": "precheck_submissions_uq",
-          "columns": [
-            {
-              "expression": "request_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "seq",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "precheck_submissions_request_id_consent_requests_id_fk": {
-          "name": "precheck_submissions_request_id_consent_requests_id_fk",
-          "tableFrom": "precheck_submissions",
-          "tableTo": "consent_requests",
-          "columnsFrom": [
-            "request_id"
           ],
           "columnsTo": [
             "id"
@@ -1320,6 +1147,112 @@
           "tableTo": "consent_requests",
           "columnsFrom": [
             "request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.template_translations": {
+      "name": "template_translations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "template_version_id": {
+          "name": "template_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_by_id": {
+          "name": "approved_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "template_translations_uq": {
+          "name": "template_translations_uq",
+          "columns": [
+            {
+              "expression": "template_version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locale",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "template_translations_template_version_id_template_versions_id_fk": {
+          "name": "template_translations_template_version_id_template_versions_id_fk",
+          "tableFrom": "template_translations",
+          "tableTo": "template_versions",
+          "columnsFrom": [
+            "template_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "template_translations_approved_by_id_users_id_fk": {
+          "name": "template_translations_approved_by_id_users_id_fk",
+          "tableFrom": "template_translations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "approved_by_id"
           ],
           "columnsTo": [
             "id"

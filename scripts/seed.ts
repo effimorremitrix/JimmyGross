@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "../src/db/schema";
 import { infiltrationTemplate as T } from "../src/domain/templates/infiltration-echoguidee";
+import { infiltrationTemplateEn } from "../src/domain/templates/infiltration-echoguidee.en";
 import { computeFlags } from "../src/domain/precheck";
 import type { PrecheckAnswers } from "../src/domain/types";
 import { buildConsentPdf, sealPdfMock } from "../src/lib/pdf";
@@ -34,7 +35,7 @@ async function main() {
   // Wipe demo practice (child tables first).
   const existing = await db.query.practices.findFirst({ where: eq(schema.practices.name, "Cabinet du Dr Jimmy Gross") });
   if (existing) {
-    // Evidence tables are append-only (migration 0002). Wiping demo data needs a
+    // Evidence tables are append-only (migration 0003). Wiping demo data needs a
     // session that skips triggers: eclaira_owner, granted SET on
     // session_replication_role by docker/postgres-init (or a superuser). The
     // app's own role cannot do this.
@@ -52,6 +53,7 @@ async function main() {
        DELETE FROM appointments WHERE practice_id=$1;
        DELETE FROM patients WHERE practice_id=$1;
        DELETE FROM visit_reasons WHERE practice_id=$1;
+       DELETE FROM template_translations WHERE template_version_id IN (SELECT v.id FROM template_versions v JOIN templates t ON t.id = v.template_id WHERE t.practice_id=$1);
        DELETE FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE practice_id=$1);
        DELETE FROM templates WHERE practice_id=$1;
        DELETE FROM users WHERE practice_id=$1;
@@ -99,6 +101,9 @@ async function main() {
     })
     .returning();
 
+  // English translation, pending the doctor's approval on the Modèles page (French until then).
+  await db.insert(schema.templateTranslations).values({ templateVersionId: version.id, locale: "en", content: infiltrationTemplateEn });
+
   await db.insert(schema.visitReasons).values([
     { practiceId: practice.id, label: "Infiltration PRP", templateId: template.id, defaultAct: "Injection de PRP" },
     { practiceId: practice.id, label: "Infiltration corticoïde", templateId: template.id, defaultAct: "Infiltration de corticoïde" },
@@ -110,6 +115,7 @@ async function main() {
   type Demo = {
     first: string; last: string; dob: string; phone: string; time: string; reason: string; act: string; loc: string;
     state: "signed" | "sent" | "opened" | "info_read"; level?: "SES" | "AES"; yes?: Record<string, string>; readMs?: number;
+    locale?: "fr" | "en";
   };
   const demos: Demo[] = [
     { first: "Paul", last: "Martin", dob: "1969-04-02", phone: "06 11 22 33 48", time: "09:00", reason: "Infiltration corticoïde", act: "Infiltration de corticoïde", loc: "Épaule gauche", state: "signed", readMs: 280_000 },
@@ -119,13 +125,14 @@ async function main() {
     { first: "Jean", last: "Bernard", dob: "1956-06-30", phone: "06 98 87 76 81", time: "14:00", reason: "Infiltration PRP", act: "Injection de PRP", loc: "Tendon d'Achille droit", state: "signed", yes: { anticoagulant: "Kardégic 75 mg" }, readMs: 362_000 },
     { first: "Claire", last: "Lefèvre", dob: "1962-01-17", phone: "07 54 43 32 29", time: "14:30", reason: "Infiltration corticoïde", act: "Infiltration de corticoïde", loc: "Hanche droite", state: "signed", yes: { diabete: "HbA1c 8,1 %" }, readMs: 211_000 },
     { first: "Thomas", last: "Petit", dob: "1983-08-08", phone: "06 33 44 55 66", time: "15:30", reason: "Infiltration rachidienne", act: "Infiltration rachidienne", loc: "L4-L5", state: "sent", level: "AES" },
+    { first: "Emma", last: "Wilson", dob: "1990-05-12", phone: "06 72 81 90 14", time: "16:00", reason: "Infiltration PRP", act: "Injection de PRP", loc: "Genou droit", state: "sent", locale: "en" },
   ];
 
   const links: string[] = [];
   for (const d of demos) {
     const [patient] = await db
       .insert(schema.patients)
-      .values({ practiceId: practice.id, firstName: d.first, lastName: d.last, birthDate: d.dob, phone: d.phone, email: `${d.first.toLowerCase()}@example.fr` })
+      .values({ practiceId: practice.id, firstName: d.first, lastName: d.last, birthDate: d.dob, phone: d.phone, email: `${d.first.toLowerCase()}@example.fr`, preferredLocale: d.locale ?? null })
       .returning();
     const scheduledAt = tomorrowAt(d.time);
     const [appt] = await db
@@ -156,6 +163,7 @@ async function main() {
         signatureLevel: d.level ?? "SES",
         plannedAct: d.act,
         plannedLocation: d.loc,
+        locale: d.locale ?? "fr",
         tokenHash: sha(token),
         tokenExpiresAt: new Date(Date.now() + 10 * 24 * 3600 * 1000),
         answers,
@@ -232,7 +240,7 @@ async function main() {
         { practiceId: practice.id, requestId: req.id, actor: "patient", type: "signature.signed", data: { provider: "mock", level: "SES", sha256: sha(signed) }, ip: "203.0.113.24", at: signedAt },
       ]);
     } else {
-      links.push(`${d.first} ${d.last} (né(e) le ${d.dob.split("-").reverse().join("/")}): ${APP_URL}/p/${token}`);
+      links.push(`${d.first} ${d.last} (né(e) le ${d.dob.split("-").reverse().join("/")}${d.locale === "en" ? ", English" : ""}): ${APP_URL}/p/${token}`);
     }
   }
 

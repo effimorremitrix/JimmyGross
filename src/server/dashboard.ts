@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { parisDayRange } from "@/lib/dates";
+import { effectiveLocale } from "./locale";
 
 export type DayRow = Awaited<ReturnType<typeof dayView>>["rows"][number];
 
@@ -85,7 +86,18 @@ export async function requestDetail(practiceId: string, requestId: string) {
   if (!patient || !appointment || !version) return null;
   const flags = allFlags.filter((f) => !f.supersededAt);
   const supersededFlags = allFlags.filter((f) => f.supersededAt).sort((a, b) => +a.supersededAt! - +b.supersededAt!);
-  return { request, patient, appointment, version, flags, supersededFlags, submissions, reads, events, docs, chain };
+  const { locale, translation } = await effectiveLocale(request.templateVersionId, request.locale);
+  const approver = translation?.approvedById
+    ? await db.query.users.findFirst({ where: eq(schema.users.id, translation.approvedById) })
+    : null;
+  /** Requested vs actually delivered language (French when the translation is not approved). */
+  const language = {
+    requested: request.locale,
+    effective: locale,
+    approvedAt: translation?.approvedAt ?? null,
+    approvedBy: approver?.name ?? null,
+  };
+  return { request, patient, appointment, version, flags, supersededFlags, submissions, reads, events, docs, chain, language };
 }
 
 export interface EvidenceChainStatus {
@@ -98,7 +110,7 @@ export interface EvidenceChainStatus {
   headHash: string | null;
 }
 
-/** Recomputes the practice's audit hash chain in the database (see migration 0002). */
+/** Recomputes the practice's audit hash chain in the database (see migration 0003). */
 export async function evidenceChain(practiceId: string): Promise<EvidenceChainStatus> {
   const res = await db.execute<{ broken: string | null; head_seq: string | null; head_hash: string | null }>(sql`
     SELECT verify_audit_chain(${practiceId}::uuid) AS broken,

@@ -9,6 +9,7 @@ Next.js 16 (App Router, server actions, Turbopack) · TypeScript · Postgres 16 
 ```
 Practice ─┬─ User (practitioner | assistant | admin)
           ├─ Template ── TemplateVersion (immutable: sections, consent block, questions, signature level)
+          │                 └─ TemplateTranslation (one per language; approved by the practitioner, then frozen)
           ├─ VisitReason (Doctolib "motif" → Template + default act + optional AES override)
           ├─ Patient ── Appointment ── ConsentRequest
           │                               ├─ ReadingEvent   (section, time on screen, full text opened at, acknowledged at)
@@ -20,6 +21,15 @@ Practice ─┬─ User (practitioner | assistant | admin)
 ```
 
 A request always points to the **exact template version** the patient read. Editing a template means publishing a new version; past proofs never change.
+
+## Languages
+
+French is the default and the reference text. Other languages (English today) are added per template version as a `TemplateTranslation`: the patient-facing strings only, keyed by the source ids, item for item (`translationProblems` refuses an incomplete one).
+
+- **Approval.** The practitioner reads the translation side by side with the French on `/cabinet/modeles` and approves it. Until then, a patient whose request asks for that language gets French. Once approved, a translation never changes; a correction is a new template version.
+- **Who chooses.** The practice sets the language on the new request form or on the request detail (until consent); it is remembered on the patient (`preferred_locale`), so the agenda import reuses it. The patient can switch on their link until they consent; every switch is logged.
+- **What follows the language.** Link SMS and e-mail, access and signing codes, every patient screen (`src/i18n/patient.ts`), Yousign's signer locale, and the consent PDF. The request keeps the language actually signed in, and the PDF carries a bilingual line naming who approved the translation, when, and that the French original is the reference. The proof file states the language too.
+- **What never changes with it.** Structure and rules come from the French source (`localizeContent`): section ids, flag severities, act keywords for applicable questions (matched on the French act). Practitioner alerts, the dashboard and the proof file stay French.
 
 ## Request lifecycle
 
@@ -58,7 +68,8 @@ Built on demand from the database: template + version, per-section reading time 
 ## Code map
 
 ```
-src/domain/          pure business rules (no I/O), unit-tested
+src/domain/          pure business rules (no I/O), unit-tested; i18n.ts = languages, translation overlay and checks
+src/i18n/            patient-facing strings per language (screens, errors, SMS, e-mail, consent PDF)
 src/db/              Drizzle schema + client
 src/lib/             config, auth, audit, crypto, dates, pdf, sms, signature providers
 src/server/          data access used by pages and actions (consent lifecycle, patient loading, dashboard queries)

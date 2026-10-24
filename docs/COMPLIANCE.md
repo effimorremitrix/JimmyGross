@@ -37,14 +37,14 @@ Not legal advice. Items to close with a lawyer, the DPO and Dr Gross's professio
 
 ## Database roles (evidence integrity)
 
-The evidence tables (`audit_events`, `precheck_submissions`) are append-only, and `audit_events` is hash-chained per practice (migration 0002). The triggers apply to every role, but a superuser can skip them (`session_replication_role = replica`) and a table owner can disable them. So the app never connects as either:
+The evidence tables (`audit_events`, `precheck_submissions`) are append-only, and `audit_events` is hash-chained per practice (migration 0003). The triggers apply to every role, but a superuser can skip them (`session_replication_role = replica`) and a table owner can disable them. So the app never connects as either:
 
 | Role | Used by | Can |
 |---|---|---|
 | `eclaira_owner` | `npm run db:migrate`, `npm run db:seed` (`DATABASE_OWNER_URL`) | Own the schema. In local Docker only, also skip triggers to wipe the demo practice |
 | `eclaira_app` | the running app (`DATABASE_URL`) | SELECT/INSERT/UPDATE/DELETE on app tables; only SELECT/INSERT on `audit_events` and `precheck_submissions`; no DELETE on `precheck_flags`; no TRUNCATE, DDL, temporary tables or trigger bypass; EXECUTE on `verify_audit_chain` |
 
-Migration 0003 sets the app grants (idempotent, also for future tables via default privileges) and pins the `search_path` of the chain functions, so a session's temporary table can never stand in for `audit_events`. In production the app refuses to start when `DATABASE_URL` is a superuser or the owner of the evidence tables (`src/db/index.ts`, called from `src/instrumentation.ts`).
+Migration 0004 sets the app grants (idempotent, also for future tables via default privileges) and pins the `search_path` of the chain functions, so a session's temporary table can never stand in for `audit_events`. In production the app refuses to start when `DATABASE_URL` is a superuser or the owner of the evidence tables (`src/db/index.ts`, called from `src/instrumentation.ts`).
 
 ### Production setup on an HDS-certified managed Postgres (Scaleway, OVHcloud)
 
