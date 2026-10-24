@@ -60,7 +60,7 @@ FAQ = [
     (
         "Combien coûte Éclaira ?",
         [
-            "Le tarif est fixé avec les cabinets pilotes, selon le nombre de praticiens. Écrivez-nous pour en parler.",
+            "89 € HT par praticien et par mois, consentements illimités ; 69 € HT par praticien dès 3 praticiens. Les cabinets pilotes démarrent gratuitement pendant 3 mois.",
         ],
     ),
 ]

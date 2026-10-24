@@ -1,6 +1,6 @@
 <!--
-TITLE: Éclaira : le consentement éclairé signé avant le rendez-vous
-DESC: Fiche d'information, questionnaire de sécurité et consentement signé par vos patients 72 h avant le geste. Pour les cabinets qui prennent rendez-vous sur Doctolib.
+TITLE: Éclaira : les contre-indications connues la veille du geste
+DESC: Questionnaire de sécurité, fiche d'information et consentement signé 72 h avant le geste : les contre-indications remontent la veille. Pour les cabinets Doctolib.
 PATH: /
 -->
 <!doctype html>
@@ -34,7 +34,8 @@ PATH: /
       "applicationCategory": "HealthApplication",
       "operatingSystem": "Web",
       "inLanguage": "fr-FR",
-      "description": "Recueil à distance du consentement éclairé, du questionnaire de sécurité et de la signature électronique avant un acte médical.",
+      "description": "Questionnaire de sécurité avec alertes, information du patient et consentement éclairé signé à distance avant un acte médical.",
+      "offers": { "@type": "Offer", "price": "89", "priceCurrency": "EUR", "url": "{{BASE}}/#tarifs" },
       "publisher": { "@id": "{{BASE}}/#org" }
     },
     {
@@ -58,9 +59,9 @@ PATH: /
   <section class="hero" aria-labelledby="titre">
     <div class="wrap">
       <div class="hero-head">
-        <h1 id="titre">Le consentement signé avant que le patient n'arrive.</h1>
+        <h1 id="titre">Les contre-indications découvertes la veille, pas sur la table.</h1>
         <div>
-          <p class="lede">Éclaira envoie à vos patients la fiche d'information, le questionnaire de sécurité et le consentement à signer, trois jours avant le geste. Vous découvrez les contre-indications la veille, pas sur la table.</p>
+          <p class="lede">Trois jours avant le geste, Éclaira envoie à votre patient la fiche d'information et votre questionnaire de sécurité. Un antiagrégant déclaré devient une alerte sur votre tableau de bord, avec le nom du médicament. Le jour J, le consentement est déjà signé et le dossier de preuve rangé.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#pilote">Demander une démo</a>
             <a class="btn btn-quiet" href="#comment">Comment ça marche</a>
@@ -202,6 +203,45 @@ PATH: /
         <div><h3>Signature eIDAS</h3><p>Signature électronique simple avec code à usage unique, ou avancée avec vérification d'identité pour les gestes qui le justifient.</p></div>
         <div><h3>Messages sans données médicales</h3><p>Les SMS et e-mails ne contiennent que votre nom, la date et le lien. L'accès est protégé par la date de naissance ou un code.</p></div>
       </div>
+    </div>
+  </section>
+
+  <section class="section" id="tarifs" aria-labelledby="tarifs-titre">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="tarifs-titre">Un créneau sauvé par mois paie l'abonnement.</h2>
+        <p>Sans engagement. Consentements illimités dans chaque formule.</p>
+      </div>
+      <ul class="plans">
+        <li class="plan">
+          <h3>Pilote</h3>
+          <p class="plan-price"><strong>0 €</strong> pendant 3 mois</p>
+          <ul>
+            <li>Réservé à 5 cabinets.</li>
+            <li>Vos documents et votre questionnaire mis en ligne avec vous.</li>
+            <li>En échange de vos retours, et d'une référence si vous êtes satisfait.</li>
+          </ul>
+        </li>
+        <li class="plan plan-featured">
+          <h3>Cabinet</h3>
+          <p class="plan-price"><strong>89 € HT</strong> par praticien et par mois</p>
+          <ul>
+            <li>Questionnaire de sécurité et alertes.</li>
+            <li>Dossier de preuve horodaté.</li>
+            <li>Signature électronique avec code SMS.</li>
+          </ul>
+        </li>
+        <li class="plan">
+          <h3>Centre</h3>
+          <p class="plan-price"><strong>69 € HT</strong> par praticien et par mois, dès 3 praticiens</p>
+          <ul>
+            <li>Tout le plan Cabinet.</li>
+            <li>Tableau de bord multi-praticiens et multi-sites.</li>
+            <li>Rôles secrétariat et médecin.</li>
+          </ul>
+        </li>
+      </ul>
+      <p class="small plan-note">Signature avancée avec vérification d'identité facturée à l'usage, pour les gestes qui la justifient.</p>
     </div>
   </section>
 
