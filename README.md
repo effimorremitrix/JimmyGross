@@ -23,7 +23,7 @@ First practice: **Dr Jimmy Gross** (rhumatologie interventionnelle), template *I
 ```bash
 cp .env.example .env            # set SESSION_SECRET: openssl rand -base64 48
 docker compose up -d db         # or any local Postgres 16, see below
-npm install --legacy-peer-deps
+npm ci
 npm run db:migrate              # as eclaira_owner (DATABASE_OWNER_URL)
 npm run db:seed                 # as eclaira_owner; prints demo logins and patient links
 npm run dev                     # as eclaira_app (DATABASE_URL), http://localhost:3000
