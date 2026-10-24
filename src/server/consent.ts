@@ -8,6 +8,9 @@ import { emailSender, linkEmail, maskEmail } from "@/lib/email";
 import { providerByName } from "@/lib/signature";
 import type { ProviderRef } from "@/lib/signature/types";
 import { maskPhone, smsSender } from "@/lib/sms";
+import { effectiveLocale } from "./locale";
+import { DEFAULT_LOCALE, isLocale, LOCALE_TAG } from "@/domain/i18n";
+import { patientText } from "@/i18n/patient";
 import { advance } from "@/domain/status";
 import type { RequestStatus } from "@/domain/types";
 export { pickChannel, sendTimeFor } from "@/domain/delivery";
@@ -46,7 +49,8 @@ export function deliveryLabel(channel: Channel, patient: Pick<Patient, "phone" |
 }
 
 /**
- * Sends the link on the request's channel(s). Messages carry no health data:
+ * Sends the link on the request's channel(s), in the request's language when its
+ * translation is approved (French otherwise). Messages carry no health data:
  * practitioner name, appointment date, link.
  */
 export async function deliverLink(params: {
@@ -59,19 +63,18 @@ export async function deliverLink(params: {
 }) {
   const { request: r, patient, practice } = params;
   const link = patientLink(params.token);
-  const dateLabel = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", timeZone: "Europe/Paris" }).format(
+  const { locale } = await effectiveLocale(r.templateVersionId, r.locale);
+  const t = patientText(locale);
+  const dateLabel = new Intl.DateTimeFormat(LOCALE_TAG[locale], { day: "2-digit", month: "2-digit", timeZone: "Europe/Paris" }).format(
     params.appointmentAt,
   );
   const sent: string[] = [];
   if ((r.channel === "sms" || r.channel === "sms_email") && patient.phone) {
-    await smsSender().send(
-      patient.phone,
-      `${practice.practitionerName} : merci de compléter vos documents avant votre rendez-vous du ${dateLabel}. ${link}`,
-    );
+    await smsSender().send(patient.phone, t.linkSms(practice.practitionerName, dateLabel, link));
     sent.push("sms");
   }
   if ((r.channel === "email" || r.channel === "sms_email") && patient.email) {
-    const m = linkEmail({ practitioner: practice.practitionerName, dateLabel, link, practicePhone: practice.phone });
+    const m = linkEmail({ practitioner: practice.practitionerName, dateLabel, link, practicePhone: practice.phone, locale });
     await emailSender().send(patient.email, m.subject, m.text, m.html);
     sent.push("email");
   }
@@ -86,7 +89,7 @@ export async function deliverLink(params: {
       updatedAt: new Date(),
     })
     .where(eq(schema.consentRequests.id, r.id));
-  await audit({ practiceId: r.practiceId, requestId: r.id, actor: params.actor, type: "request.sent", data: { channels: sent }, withRequestMeta: params.actor !== "system" });
+  await audit({ practiceId: r.practiceId, requestId: r.id, actor: params.actor, type: "request.sent", data: { channels: sent, locale }, withRequestMeta: params.actor !== "system" });
 }
 
 /** Rotates the token and sends: used by reminders, immediate sends and the scheduler. */
@@ -149,6 +152,7 @@ export function providerRef(r: ConsentRequest, patient: Pick<Patient, "phone" | 
     documentId: r.providerDocumentId ?? "",
     phone: patient.phone,
     email: patient.email,
+    locale: isLocale(r.locale) ? r.locale : DEFAULT_LOCALE,
   };
 }
 

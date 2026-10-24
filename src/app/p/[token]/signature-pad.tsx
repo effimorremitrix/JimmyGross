@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import type { PatientText } from "@/i18n/patient";
 
 export interface SignaturePadHandle {
   /** PNG data URL, or null when nothing has been drawn/typed. */
@@ -12,8 +13,8 @@ export interface SignaturePadHandle {
  * Finger/mouse/stylus signature, with a typed-name fallback for patients who
  * cannot draw (motor impairment, screen reader, no touch screen).
  */
-export const SignaturePad = forwardRef<SignaturePadHandle, { onChange(hasInk: boolean): void; fullName: string }>(
-  function SignaturePad({ onChange, fullName }, ref) {
+export const SignaturePad = forwardRef<SignaturePadHandle, { onChange(hasInk: boolean): void; fullName: string; t: PatientText }>(
+  function SignaturePad({ onChange, fullName, t }, ref) {
     const canvas = useRef<HTMLCanvasElement>(null);
     const drawing = useRef(false);
     const last = useRef<{ x: number; y: number } | null>(null);
@@ -108,7 +109,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, { onChange(hasInk: bo
         <canvas
           ref={canvas}
           role="img"
-          aria-label={mode === "draw" ? "Zone de signature : signez avec le doigt ou la souris" : "Aperçu de votre signature tapée"}
+          aria-label={mode === "draw" ? t.padDraw : t.padTyped}
           className="h-44 w-full touch-none rounded-2xl border-2 border-dashed border-line-strong bg-white"
           onPointerDown={down}
           onPointerMove={move}
@@ -118,7 +119,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, { onChange(hasInk: bo
         />
         {mode === "type" && (
           <label className="flex flex-col gap-1 text-[14px] font-semibold">
-            Tapez vos prénom et nom
+            {t.typeName}
             <input
               className="h-12 rounded-xl border border-line-strong bg-white px-3 text-[16px] font-normal"
               value={typed}
@@ -130,14 +131,14 @@ export const SignaturePad = forwardRef<SignaturePadHandle, { onChange(hasInk: bo
         )}
         <div className="flex flex-wrap gap-x-5">
           <button type="button" className="min-h-11 text-[14px] font-medium text-brand underline-offset-2 hover:underline" onClick={() => (mode === "draw" ? setup() : setTyped(""))}>
-            Effacer
+            {t.clear}
           </button>
           <button
             type="button"
             className="min-h-11 text-[14px] font-medium text-brand underline-offset-2 hover:underline"
             onClick={() => setMode(mode === "draw" ? "type" : "draw")}
           >
-            {mode === "draw" ? "Je préfère taper mon nom" : "Signer avec le doigt"}
+            {mode === "draw" ? t.preferTyping : t.signWithFinger}
           </button>
         </div>
       </div>

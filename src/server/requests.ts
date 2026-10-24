@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { audit, type AuditActor } from "@/lib/audit";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "@/domain/i18n";
 import { deliverLink, rotateToken, sendTimeFor, type Channel, type ConsentRequest } from "./consent";
 
 export interface PatientInput {
@@ -61,6 +62,7 @@ export type SendMode = "now" | "scheduled" | "none";
 /**
  * Creates appointment + consent request from a Doctolib visit reason, then sends
  * now, schedules the send at the practice's lead time, or leaves it for a manual link.
+ * Language: the one chosen by the practice, else the patient's last one, else French.
  */
 export async function createConsentRequest(p: {
   practice: Practice;
@@ -74,12 +76,18 @@ export async function createConsentRequest(p: {
   sendMode: SendMode;
   source?: "manual" | "import";
   importBatchId?: string | null;
+  locale?: Locale;
 }): Promise<{ request: ConsentRequest; token: string; sendAt: Date | null; sent: boolean }> {
   const version = await db.query.templateVersions.findFirst({
     where: eq(schema.templateVersions.templateId, p.reason.templateId),
     orderBy: desc(schema.templateVersions.version),
   });
   if (!version) throw new Error("Aucun modèle publié pour ce motif.");
+
+  const locale = p.locale ?? (isLocale(p.patient.preferredLocale) ? p.patient.preferredLocale : DEFAULT_LOCALE);
+  if (p.locale && p.locale !== (p.patient.preferredLocale ?? DEFAULT_LOCALE)) {
+    await db.update(schema.patients).set({ preferredLocale: p.locale }).where(eq(schema.patients.id, p.patient.id));
+  }
 
   const [appointment] = await db
     .insert(schema.appointments)
@@ -97,6 +105,7 @@ export async function createConsentRequest(p: {
       signatureLevel: p.reason.signatureLevelOverride ?? version.signatureLevel,
       plannedAct: p.reason.defaultAct,
       plannedLocation: p.location,
+      locale,
       tokenHash: `pending-${crypto.randomUUID()}`,
       tokenExpiresAt: new Date(),
       scheduledSendAt: sendAt,
@@ -104,7 +113,7 @@ export async function createConsentRequest(p: {
       createdById: p.userId,
     })
     .returning();
-  await audit({ practiceId: p.practice.id, requestId: request.id, actor: p.actor, type: p.source === "import" ? "request.imported" : "request.created" });
+  await audit({ practiceId: p.practice.id, requestId: request.id, actor: p.actor, type: p.source === "import" ? "request.imported" : "request.created", data: { locale } });
 
   const token = await rotateToken(request.id);
   const due = p.sendMode === "now" || (sendAt !== null && sendAt.getTime() <= Date.now() + 60_000);

@@ -1,6 +1,8 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "@/lib/config";
+import { maskPhone } from "@/lib/sms";
+import { patientText } from "@/i18n/patient";
 import type { ProviderRef, SignResult, SignatureProvider, SignedOutput, StartInput, StartResult } from "./types";
 
 /**
@@ -66,7 +68,7 @@ export class YousignProvider implements SignatureProvider {
           last_name: input.signer.lastName,
           email,
           ...(input.signer.phone ? { phone_number: toE164(input.signer.phone) } : {}),
-          locale: "fr",
+          locale: input.locale,
         },
         signature_level: aes ? "advanced_electronic_signature" : "electronic_signature",
         signature_authentication_mode: input.signer.phone ? "otp_sms" : "otp_email",
@@ -104,8 +106,8 @@ export class YousignProvider implements SignatureProvider {
     await this.call(`/signature_requests/${ref.providerRequestId}/signers/${ref.signerId}/send_otp`, {
       method: "POST",
     });
-    const d = (ref.phone ?? "").replace(/\D/g, "");
-    return { sentTo: ref.phone ? `au ${d.slice(0, 2)} •• •• •• ${d.slice(-2)}` : "à votre adresse e-mail" };
+    const t = patientText(ref.locale);
+    return { sentTo: ref.phone ? t.toPhone(maskPhone(ref.phone)) : t.toYourEmail };
   }
 
   async signWithOtp(

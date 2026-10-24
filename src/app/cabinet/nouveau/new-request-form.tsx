@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Button, buttonClass, Card, Icon } from "@/components/ui";
+import { DEFAULT_LOCALE, LOCALE_LABEL_FR, LOCALES, type Locale } from "@/domain/i18n";
 import { createRequest, type CreateState } from "../actions";
 
 interface Reason {
@@ -10,11 +11,14 @@ interface Reason {
   label: string;
   act: string;
   aes: boolean;
+  /** Languages with an approved text for this motif (French always). */
+  locales: Locale[];
 }
 
 export function NewRequestForm({ reasons, defaultDate }: { reasons: Reason[]; defaultDate: string }) {
   const [state, action, pending] = useActionState<CreateState | undefined, FormData>(createRequest, undefined);
   const [reasonId, setReasonId] = useState(reasons[0]?.id ?? "");
+  const [locale, setLocale] = useState<string>(state?.values?.locale ?? DEFAULT_LOCALE);
   const [copied, setCopied] = useState(false);
   const reason = reasons.find((r) => r.id === reasonId);
 
@@ -109,6 +113,24 @@ export function NewRequestForm({ reasons, defaultDate }: { reasons: Reason[]; de
           )}
           <Field label="Localisation prévue" error={err("location")} className={`${label} sm:col-span-2`}>
             <input name="location" defaultValue={val("location")} placeholder="Ex. genou droit" className={input} />
+          </Field>
+          <Field
+            label="Langue du patient"
+            error={err("locale")}
+            className={`${label} sm:col-span-2`}
+            hint={
+              reason && !reason.locales.includes(locale as Locale)
+                ? "Traduction pas encore validée par le médecin (page Modèles) : le patient recevra la version française."
+                : "SMS, écrans et document signé dans cette langue. Le patient peut aussi changer de langue lui-même."
+            }
+          >
+            <select name="locale" value={locale} onChange={(e) => setLocale(e.target.value)} className={input}>
+              {LOCALES.map((l) => (
+                <option key={l} value={l}>
+                  {LOCALE_LABEL_FR[l].replace(/^./, (c) => c.toUpperCase())}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
       </Card>
