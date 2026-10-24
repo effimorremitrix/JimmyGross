@@ -13,6 +13,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["pg"],
+  // Treat every user agent as an HTML-limited bot, so metadata blocks rendering
+  // and <title> is always in <head>. Streamed metadata (the default) lands in
+  // <body> once generateMetadata resolves, which left the patient page untitled
+  // for a moment after the identity check. No page flushes anything before its
+  // data is loaded, so blocking costs no measurable TTFB.
+  htmlLimitedBots: /.*/,
   turbopack: {
     rules: {
       "*.css": {
