@@ -132,7 +132,8 @@ export async function newLink(requestId: string): Promise<{ ok: boolean; link?: 
 export async function reviewFlag(flagId: string): Promise<void> {
   const staff = await requireStaff();
   const flag = await db.query.precheckFlags.findFirst({ where: eq(schema.precheckFlags.id, flagId) });
-  if (!flag) return;
+  // A superseded flag belongs to an older submission: its review is history.
+  if (!flag || flag.supersededAt) return;
   const r = await ownedRequest(staff.practiceId, flag.requestId);
   if (!r) return;
   const reviewed = !flag.reviewedAt;
@@ -140,9 +141,14 @@ export async function reviewFlag(flagId: string): Promise<void> {
     .update(schema.precheckFlags)
     .set({ reviewedAt: reviewed ? new Date() : null, reviewedById: reviewed ? staff.userId : null })
     .where(eq(schema.precheckFlags.id, flag.id));
-  if (reviewed) {
-    await audit({ practiceId: r.practiceId, requestId: r.id, actor: `user:${staff.userId}`, type: "flag.reviewed", data: { questionId: flag.questionId } });
-  }
+  // Both directions are logged, so undoing a review never erases that it happened.
+  await audit({
+    practiceId: r.practiceId,
+    requestId: r.id,
+    actor: `user:${staff.userId}`,
+    type: reviewed ? "flag.reviewed" : "flag.unreviewed",
+    data: { questionId: flag.questionId, flagId: flag.id },
+  });
   revalidatePath("/cabinet");
   revalidatePath(`/cabinet/demandes/${r.id}`);
 }
@@ -186,7 +192,9 @@ export async function reviewAllFlags(requestId: string): Promise<void> {
   const staff = await requireStaff();
   const r = await ownedRequest(staff.practiceId, requestId);
   if (!r) return;
-  const open = await db.query.precheckFlags.findMany({ where: eq(schema.precheckFlags.requestId, r.id) });
+  const open = await db.query.precheckFlags.findMany({
+    where: and(eq(schema.precheckFlags.requestId, r.id), isNull(schema.precheckFlags.supersededAt)),
+  });
   const ids = open.filter((f) => !f.reviewedAt).map((f) => f.id);
   if (!ids.length) return;
   await db.update(schema.precheckFlags).set({ reviewedAt: new Date(), reviewedById: staff.userId }).where(inArray(schema.precheckFlags.id, ids));

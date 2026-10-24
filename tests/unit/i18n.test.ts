@@ -74,7 +74,7 @@ describe("Patient text", () => {
     expect(patientText("en").linkSms("Dr Jimmy Gross", "27/10", "https://x/p/t")).toBe(
       "Dr Jimmy Gross: please complete your documents before your appointment on 27/10. https://x/p/t",
     );
-    expect(patientText("fr").codeSms("sign", "123456")).toMatch(/^Consentza : votre code de signature est 123456/);
+    expect(patientText("fr").codeSms("sign", "123456")).toMatch(/^Éclaira : votre code de signature est 123456/);
     expect(patientText("en").errAttemptsLeft(1)).toBe("You have 1 attempt left.");
   });
 });

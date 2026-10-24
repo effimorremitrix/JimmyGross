@@ -27,18 +27,26 @@ function tomorrowAt(hhmm: string): Date {
 }
 
 async function main() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  // The owner role (eclaira_owner); DATABASE_URL is the fallback for local dev.
+  const pool = new Pool({ connectionString: process.env.DATABASE_OWNER_URL || process.env.DATABASE_URL });
   const db = drizzle(pool, { schema });
-  const password = process.env.SEED_PASSWORD ?? "consentza-demo";
+  const password = process.env.SEED_PASSWORD ?? "eclaira-demo";
 
   // Wipe demo practice (child tables first).
   const existing = await db.query.practices.findFirst({ where: eq(schema.practices.name, "Cabinet du Dr Jimmy Gross") });
   if (existing) {
+    // Evidence tables are append-only (migration 0003). Wiping demo data needs a
+    // session that skips triggers: eclaira_owner, granted SET on
+    // session_replication_role by docker/postgres-init (or a superuser). The
+    // app's own role cannot do this.
     await pool.query(
-      `DELETE FROM audit_events WHERE practice_id=$1;
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       DELETE FROM audit_events WHERE practice_id=$1;
        DELETE FROM otp_challenges WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM documents WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM precheck_flags WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
+       DELETE FROM precheck_submissions WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM reading_events WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM consent_requests WHERE practice_id=$1;
        DELETE FROM import_batches WHERE practice_id=$1;
@@ -49,7 +57,8 @@ async function main() {
        DELETE FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE practice_id=$1);
        DELETE FROM templates WHERE practice_id=$1;
        DELETE FROM users WHERE practice_id=$1;
-       DELETE FROM practices WHERE id=$1;`.replace(/\$1/g, `'${existing.id}'`),
+       DELETE FROM practices WHERE id=$1;
+       COMMIT;`.replace(/\$1/g, `'${existing.id}'`),
     );
   }
 
@@ -68,8 +77,8 @@ async function main() {
   const [doctor] = await db
     .insert(schema.users)
     .values([
-      { practiceId: practice.id, email: "dr.gross@demo.consentza.fr", name: "Dr Jimmy Gross", passwordHash: hash, role: "practitioner" },
-      { practiceId: practice.id, email: "secretariat@demo.consentza.fr", name: "Secrétariat", passwordHash: hash, role: "assistant" },
+      { practiceId: practice.id, email: "dr.gross@demo.eclaira.fr", name: "Dr Jimmy Gross", passwordHash: hash, role: "practitioner" },
+      { practiceId: practice.id, email: "secretariat@demo.eclaira.fr", name: "Secrétariat", passwordHash: hash, role: "assistant" },
     ])
     .returning();
 
@@ -183,8 +192,12 @@ async function main() {
     }
 
     if (d.state === "signed" && answers) {
+      const [submission] = await db
+        .insert(schema.precheckSubmissions)
+        .values({ requestId: req.id, seq: 1, answers, submittedAt: new Date(signedAt.getTime() - 120_000) })
+        .returning();
       for (const f of computeFlags(T.questions, d.act, answers)) {
-        await db.insert(schema.precheckFlags).values({ requestId: req.id, questionId: f.questionId, severity: f.severity, message: f.message, detail: f.detail });
+        await db.insert(schema.precheckFlags).values({ requestId: req.id, submissionId: submission.id, questionId: f.questionId, severity: f.severity, message: f.message, detail: f.detail });
       }
       const { bytes } = await buildConsentPdf({
         practiceName: practice.name,
@@ -253,7 +266,7 @@ async function main() {
 
   console.log("\nSeeded the demo practice.");
   console.log("Demo agenda export (next week): samples/agenda-semaine-demo.csv");
-  console.log(`Login: dr.gross@demo.consentza.fr / ${password}  (or secretariat@demo.consentza.fr)`);
+  console.log(`Login: dr.gross@demo.eclaira.fr / ${password}  (or secretariat@demo.eclaira.fr)`);
   console.log("Patient links to try:");
   for (const l of links) console.log(`  ${l}`);
   await pool.end();

@@ -28,7 +28,7 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const d = await requestDetail(staff.practiceId, id);
   if (!d) notFound();
-  const { request: r, patient, appointment, version, flags, reads, events, docs, language } = d;
+  const { request: r, patient, appointment, version, flags, supersededFlags, submissions, reads, events, docs, chain, language } = d;
   const languageLocked = !!r.patientAckAt || isTerminal(r.status);
   const questions = applicableQuestions(version.questions, r.plannedAct);
   const totalMs = reads.reduce((s, e) => s + e.visibleMs, 0);
@@ -93,6 +93,12 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
 
           <Card className="p-5">
             <h2 className="text-[17px] font-semibold">Questionnaire avant le geste</h2>
+            {submissions.length > 1 && (
+              <p className="mt-1 text-[13px] text-muted">
+                Version {submissions.length} des réponses, envoyée le {frDateTime(submissions[submissions.length - 1].submittedAt)}. Les versions
+                précédentes sont conservées dans le dossier de preuve.
+              </p>
+            )}
             {!r.answers ? (
               <p className="mt-2 text-[14px] text-muted">Pas encore rempli.</p>
             ) : (
@@ -155,8 +161,32 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
             </ul>
           </Card>
 
+          {supersededFlags.length > 0 && (
+            <Card className="p-5">
+              <h2 className="text-[17px] font-semibold">Alertes remplacées</h2>
+              <p className="mt-1 text-[13px] text-muted">Réponses antérieures du patient, remplacées par un nouvel envoi du questionnaire. Conservées comme preuve.</p>
+              <ul className="mt-3 flex flex-col gap-2 text-[14px]">
+                {supersededFlags.map((f) => (
+                  <li key={f.id} className="rounded-xl border border-line p-3">
+                    <strong>{f.message}</strong>
+                    {f.detail ? ` : ${f.detail}` : ""}
+                    <span className="block text-[13px] text-muted">
+                      {f.reviewedAt ? `Vérifiée le ${frDateTime(f.reviewedAt)}, ` : "Non vérifiée, "}
+                      remplacée le {frDateTime(f.supersededAt!)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           <Card className="p-5">
-            <h2 className="text-[17px] font-semibold">Journal horodaté</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[17px] font-semibold">Journal horodaté</h2>
+              <Chip tone={chain.intact ? "ok" : "danger"}>
+                {chain.intact ? "Journal intègre" : `Journal altéré (événement n° ${chain.brokenAt})`}
+              </Chip>
+            </div>
             <ol className="mt-3 flex flex-col gap-2 text-[14px]">
               {events.map((e) => (
                 <li key={e.id} className="flex flex-wrap gap-x-3">

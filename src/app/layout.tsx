@@ -3,10 +3,10 @@ import "@fontsource-variable/inter";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Consentza", template: "%s · Consentza" },
+  title: { default: "Éclaira", template: "%s · Éclaira" },
   description: "Consentement éclairé et questionnaire pré-geste signés à distance, avant le rendez-vous.",
   robots: { index: false, follow: false, nocache: true },
-  applicationName: "Consentza",
+  applicationName: "Éclaira",
 };
 
 export const viewport: Viewport = {

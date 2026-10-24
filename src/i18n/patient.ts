@@ -163,7 +163,7 @@ const fr = {
   toEmail: (masked: string) => `à l'adresse ${masked}`,
   toYourEmail: "à votre adresse e-mail",
   codeSms: (kind: "sign" | "access", code: string) =>
-    `Consentza : votre code ${kind === "sign" ? "de signature" : "d'accès"} est ${code}. Il expire dans 10 minutes.`,
+    `Éclaira : votre code ${kind === "sign" ? "de signature" : "d'accès"} est ${code}. Il expire dans 10 minutes.`,
   codeEmailSubject: (kind: "sign" | "access") => `Votre code ${kind === "sign" ? "de signature" : "d'accès"}`,
   codeEmailText: (kind: "sign" | "access", code: string) =>
     `Votre code ${kind === "sign" ? "de signature" : "d'accès"} est ${code}. Il expire dans 10 minutes.`,
@@ -346,7 +346,7 @@ const en: PatientText = {
   toPhone: (masked) => `to ${masked}`,
   toEmail: (masked) => `to ${masked}`,
   toYourEmail: "to your e-mail address",
-  codeSms: (kind, code) => `Consentza: your ${kind === "sign" ? "signing" : "access"} code is ${code}. It expires in 10 minutes.`,
+  codeSms: (kind, code) => `Éclaira: your ${kind === "sign" ? "signing" : "access"} code is ${code}. It expires in 10 minutes.`,
   codeEmailSubject: (kind) => `Your ${kind === "sign" ? "signing" : "access"} code`,
   codeEmailText: (kind, code) => `Your ${kind === "sign" ? "signing" : "access"} code is ${code}. It expires in 10 minutes.`,
 

@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Every page in Consentza handles health data or a signed-in clinic session,
+// Every page in Éclaira handles health data or a signed-in clinic session,
 // so nothing is cached or statically prerendered: all routes are dynamic.
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },

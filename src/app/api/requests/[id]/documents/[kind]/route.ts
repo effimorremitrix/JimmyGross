@@ -42,6 +42,8 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/requests/[id]/d
         return { title: s.title, visibleMs: e?.visibleMs ?? 0, acknowledgedAt: e?.acknowledgedAt ?? null, fullTextOpenedAt: e?.fullTextOpenedAt ?? null };
       }),
       flags: d.flags.map((f) => ({ message: f.message, detail: f.detail, reviewedAt: f.reviewedAt })),
+      supersededFlags: d.supersededFlags.map((f) => ({ message: f.message, detail: f.detail, reviewedAt: f.reviewedAt, supersededAt: f.supersededAt! })),
+      chain: d.chain,
       events: d.events.map((e) => ({
         at: e.at,
         label: AUDIT_LABEL[e.type] ?? e.type,

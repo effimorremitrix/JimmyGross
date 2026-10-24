@@ -40,7 +40,7 @@ export interface SignedOutput {
 }
 
 /**
- * The legal signature is always produced by an eIDAS provider. Consentza owns
+ * The legal signature is always produced by an eIDAS provider. Éclaira owns
  * the workflow and the reading evidence; the provider owns signature validity.
  */
 export interface SignatureProvider {
