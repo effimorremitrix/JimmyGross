@@ -1,0 +1,234 @@
+<!--
+TITLE: Éclaira : le consentement éclairé signé avant le rendez-vous
+DESC: Fiche d'information, questionnaire de sécurité et consentement signé par vos patients 72 h avant le geste. Pour les cabinets qui prennent rendez-vous sur Doctolib.
+PATH: /
+-->
+<!doctype html>
+<html lang="fr" dir="ltr">
+<head>
+{{HEAD}}
+<link rel="preload" as="image" href="/assets/video/poster.webp" type="image/webp" fetchpriority="high">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "{{BASE}}/#org",
+      "name": "Éclaira",
+      "url": "{{BASE}}/",
+      "logo": "{{BASE}}/assets/img/icon-512.png",
+      "email": "{{CONTACT}}"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "{{BASE}}/#site",
+      "url": "{{BASE}}/",
+      "name": "Éclaira",
+      "inLanguage": "fr-FR",
+      "publisher": { "@id": "{{BASE}}/#org" }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Éclaira",
+      "applicationCategory": "HealthApplication",
+      "operatingSystem": "Web",
+      "inLanguage": "fr-FR",
+      "description": "Recueil à distance du consentement éclairé, du questionnaire de sécurité et de la signature électronique avant un acte médical.",
+      "publisher": { "@id": "{{BASE}}/#org" }
+    },
+    {
+      "@type": "VideoObject",
+      "name": "Éclaira en 38 secondes",
+      "description": "De l'agenda de la semaine au consentement signé : le parcours du patient et la vue du cabinet.",
+      "thumbnailUrl": "{{BASE}}/assets/video/poster.jpg",
+      "contentUrl": "{{BASE}}/assets/video/eclaira-explainer.mp4",
+      "uploadDate": "2026-10-24",
+      "duration": "PT38S",
+      "inLanguage": "fr-FR"
+    },
+    {{FAQ_JSONLD}}
+  ]
+}
+</script>
+</head>
+<body>
+{{HEADER}}
+<main id="contenu">
+  <section class="hero" aria-labelledby="titre">
+    <div class="wrap">
+      <div class="hero-head">
+        <h1 id="titre">Le consentement signé avant que le patient n'arrive.</h1>
+        <div>
+          <p class="lede">Éclaira envoie à vos patients la fiche d'information, le questionnaire de sécurité et le consentement à signer, trois jours avant le geste. Vous découvrez les contre-indications la veille, pas sur la table.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#pilote">Demander une démo</a>
+            <a class="btn btn-quiet" href="#comment">Comment ça marche</a>
+          </div>
+        </div>
+      </div>
+
+      <figure class="film" aria-labelledby="film-legende">
+        <div class="film-frame">
+          <video id="film" muted loop playsinline preload="metadata" width="1280" height="720" poster="/assets/video/poster.webp" aria-describedby="film-transcription">
+            <source src="/assets/video/eclaira-explainer.webm" type="video/webm">
+            <source src="/assets/video/eclaira-explainer.mp4" type="video/mp4">
+            <track kind="captions" srclang="fr" label="Français" src="/assets/video/eclaira-explainer.fr.vtt">
+          </video>
+          <div class="film-controls">
+            <button type="button" class="film-btn" id="film-toggle" aria-pressed="false">
+              <svg viewBox="0 0 16 16" aria-hidden="true" id="film-icon"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+              <span id="film-label">Lire la vidéo</span>
+            </button>
+          </div>
+        </div>
+        <figcaption class="visually-hidden" id="film-legende">Vidéo de présentation d'Éclaira, 38 secondes, sans son.</figcaption>
+        <details class="transcript" id="film-transcription">
+          <summary>Lire la description de la vidéo</summary>
+          <ol>
+            <li>Lundi matin, l'agenda de la semaine entre dans Éclaira. Les rendez-vous qui demandent un consentement sont repérés tout seuls.</li>
+            <li>72 heures avant, chaque patient reçoit son lien par SMS ou par e-mail. Aucune donnée de santé dans le message.</li>
+            <li>Il lit l'essentiel de chaque partie. Le texte complet du médecin reste à un geste.</li>
+            <li>Il répond au questionnaire de sécurité. Un « oui » ouvre une question précise, par exemple le nom de l'anticoagulant, et devient une alerte pour le médecin.</li>
+            <li>Il signe du doigt, puis confirme par un code reçu par SMS.</li>
+            <li>Le cabinet voit qui a signé, qui relancer, et les réponses qui demandent un appel avant le geste.</li>
+          </ol>
+        </details>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="matin">
+    <div class="wrap morning">
+      <div class="section-head">
+        <h2 id="matin">Le matin du geste, il est trop tard pour découvrir le Kardégic.</h2>
+        <p>Aujourd'hui, le consentement se signe à l'accueil et les contre-indications se découvrent en salle. Un créneau perdu, un patient frustré, une signature obtenue dans la précipitation.</p>
+      </div>
+      <ol class="timeline" aria-label="Le même rendez-vous, avec Éclaira">
+        <li class="lit"><time>Trois jours avant</time><p>Le patient reçoit son lien, lit la fiche et répond aux questions de sécurité chez lui.</p></li>
+        <li class="lit"><time>Le soir même</time><p>Il déclare un antiagrégant. L'alerte apparaît sur votre tableau de bord, avec le nom du médicament.</p></li>
+        <li><time>La veille</time><p>Votre secrétariat appelle, ou vous adaptez le geste. Le créneau est sauvé.</p></li>
+        <li><time>Le jour J</time><p>Le consentement est déjà signé. Vous confirmez le geste réalisé en un clic.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="comment" aria-labelledby="comment-titre">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="comment-titre">Six étapes, dont aucune à faire à la main.</h2>
+        <p>Votre secrétariat dépose l'agenda de la semaine. Éclaira s'occupe du reste.</p>
+      </div>
+      <ol class="steps">
+        <li><h3>L'agenda arrive</h3><p>Déposez l'export de votre agenda. Les motifs qui demandent un consentement sont reconnus, les consultations ignorées.</p></li>
+        <li><h3>Le lien part au bon moment</h3><p>72 heures avant chaque rendez-vous, par SMS si le patient a un mobile, sinon par e-mail. Relance en un clic.</p></li>
+        <li><h3>Le patient lit</h3><p>Un résumé de chaque partie, validé par vous, et votre document original en entier, à un geste.</p></li>
+        <li><h3>Il répond</h3><p>Votre questionnaire de sécurité. Un « oui » demande une précision et devient une alerte pour vous.</p></li>
+        <li><h3>Il signe</h3><p>Du doigt sur son téléphone, puis avec un code à usage unique. Signature électronique au sens du règlement eIDAS.</p></li>
+        <li><h3>Vous êtes prêt</h3><p>Tableau de bord du jour, alertes à vérifier, document signé et dossier de preuve dans la fiche du patient.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="pour-qui">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="pour-qui">Pensé pour les trois personnes du parcours.</h2>
+      </div>
+      <div class="audiences">
+        <div class="audience">
+          <h3>Le médecin</h3>
+          <ul>
+            <li>Vos propres documents, mot pour mot.</li>
+            <li>Les contre-indications connues avant le geste.</li>
+            <li>La preuve que l'information a été délivrée.</li>
+          </ul>
+        </div>
+        <div class="audience">
+          <h3>Le secrétariat</h3>
+          <ul>
+            <li>Un import par semaine, puis plus rien à envoyer.</li>
+            <li>Qui a signé, qui relancer, en un coup d'œil.</li>
+            <li>Fini les formulaires papier à scanner.</li>
+          </ul>
+        </div>
+        <div class="audience">
+          <h3>Le patient</h3>
+          <ul>
+            <li>Il lit chez lui, à son rythme, sans application.</li>
+            <li>Un texte court, et l'intégral s'il le souhaite.</li>
+            <li>Des caractères conçus pour la lisibilité.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="preuve" aria-labelledby="preuve-titre">
+    <div class="wrap proof">
+      <div class="proof-text">
+        <h2 id="preuve-titre">Prouver l'information, pas seulement la signature.</h2>
+        <p>En cas de litige, c'est au médecin de prouver que le patient a été informé. Une signature au bas d'une feuille ne dit pas ce qui a été lu.</p>
+        <p>Éclaira horodate chaque partie confirmée, le temps passé à l'écran, l'ouverture du texte intégral, les réponses au questionnaire et la vérification des alertes. Le tout est rassemblé dans un dossier de preuve, à côté du document signé.</p>
+      </div>
+      <div class="sheet" role="group" aria-label="Exemple de dossier de preuve">
+        <span class="example-tag">Exemple</span>
+        <p class="sheet-title">Dossier de preuve d'information et de consentement</p>
+        <p class="sheet-meta">Infiltration échoguidée, modèle version 1. Patient de démonstration.</p>
+        <table>
+          <caption>Lecture de la fiche d'information</caption>
+          <thead><tr><th scope="col">Partie</th><th scope="col">Confirmée</th><th scope="col">À l'écran</th></tr></thead>
+          <tbody>
+            <tr><td>3. Bénéfices et limites</td><td>27/10, 18:39</td><td>41 s</td></tr>
+            <tr><td>4. Information sur le PRP</td><td>27/10, 18:40</td><td>58 s</td></tr>
+            <tr><td>8. Risques possibles<br><span class="small full-tag">texte intégral ouvert</span></td><td>27/10, 18:42</td><td>1 min 36 s</td></tr>
+            <tr><td>Questionnaire : antiagrégant</td><td>27/10, 18:45</td><td>« Kardégic 75 mg »</td></tr>
+            <tr><td>Alerte vérifiée par le médecin</td><td>28/10, 08:12</td><td></td></tr>
+          </tbody>
+        </table>
+        <p class="sheet-note">Empreinte SHA-256 du document signé et journal horodaté complet en annexe.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="securite" aria-labelledby="securite-titre">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="securite-titre">Des données de santé traitées comme telles.</h2>
+      </div>
+      <div class="trust">
+        <div><h3>Hébergement de données de santé</h3><p>Les données des patients sont hébergées en France, chez un hébergeur certifié HDS. Rien ne passe par des outils grand public.</p></div>
+        <div><h3>RGPD</h3><p>Le cabinet reste responsable de traitement ; Éclaira agit comme sous-traitant, avec un contrat de sous-traitance et une analyse d'impact.</p></div>
+        <div><h3>Signature eIDAS</h3><p>Signature électronique simple avec code à usage unique, ou avancée avec vérification d'identité pour les gestes qui le justifient.</p></div>
+        <div><h3>Messages sans données médicales</h3><p>Les SMS et e-mails ne contiennent que votre nom, la date et le lien. L'accès est protégé par la date de naissance ou un code.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pilote" aria-labelledby="pilote-titre">
+    <div class="wrap">
+      <div class="pilot">
+        <div>
+          <h2 id="pilote-titre">Ouvrez un pilote dans votre cabinet.</h2>
+          <p>Nous accompagnons quelques cabinets pour démarrer : vos documents mis en ligne, votre questionnaire paramétré, votre premier import d'agenda fait avec vous.</p>
+        </div>
+        <a class="btn btn-primary" href="mailto:{{CONTACT}}?subject=Pilote%20%C3%89claira">Demander une démo</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="questions" aria-labelledby="questions-titre">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="questions-titre">Questions fréquentes</h2>
+      </div>
+      <div class="faq">
+{{FAQ_HTML}}
+      </div>
+    </div>
+  </section>
+</main>
+{{FOOTER}}
+<script src="/assets/js/site.js?v={{VERSION}}" defer></script>
+</body>
+</html>

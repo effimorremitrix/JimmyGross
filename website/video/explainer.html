@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Éclaira explainer (render source)</title>
+<style>
+@font-face { font-family: "Bricolage"; src: url("../site/assets/fonts/bricolage.woff2") format("woff2"); font-weight: 200 800; }
+@font-face { font-family: "Atkinson"; src: url("../site/assets/fonts/atkinson-400.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Atkinson"; src: url("../site/assets/fonts/atkinson-700.woff2") format("woff2"); font-weight: 700; }
+:root {
+  --ink: #1d2145; --ink2: #4a4f75; --porcelain: #f3f5fa; --paper: #fff; --ray: #f5b53f;
+  --action: #2a4bd8; --signal: #b4410e; --ok: #1e6b45; --okbg: #e3f3ea; --line: #dfe3ee;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--porcelain); }
+#stage { position: relative; width: 1280px; height: 720px; overflow: hidden; background: var(--porcelain); font-family: "Atkinson", sans-serif; color: var(--ink); }
+.abs { position: absolute; }
+/* The light: a soft amber beam that travels to whatever matters in each scene. */
+#beam { left: 0; top: 0; width: 1600px; height: 260px; background: radial-gradient(closest-side, rgba(245,181,63,.38), rgba(245,181,63,0)); transform-origin: 0 50%; filter: blur(8px); pointer-events: none; }
+.scene { position: absolute; inset: 0; opacity: 0; }
+.cap { left: 72px; top: 0; width: 500px; height: 720px; display: flex; flex-direction: column; justify-content: center; gap: 18px; }
+.step { font-family: "Bricolage"; font-weight: 600; font-size: 20px; color: var(--ink2); display: flex; align-items: center; gap: 10px; }
+.step i { display: inline-block; width: 28px; height: 4px; border-radius: 2px; background: var(--ray); }
+.cap h2 { margin: 0; font-family: "Bricolage"; font-weight: 700; font-size: 46px; line-height: 1.08; letter-spacing: -0.02em; }
+.cap p { margin: 0; font-size: 22px; line-height: 1.4; color: var(--ink2); max-width: 440px; }
+/* Phone */
+.phone { left: 790px; top: 46px; width: 318px; height: 628px; border-radius: 44px; background: #11142c; padding: 12px; box-shadow: 0 30px 60px -20px rgba(29,33,69,.45); }
+.screen { width: 100%; height: 100%; border-radius: 34px; background: var(--porcelain); overflow: hidden; position: relative; }
+.sbar { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font-size: 13px; font-weight: 700; }
+.apphead { padding: 8px 18px 12px; background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-family: "Bricolage"; font-weight: 700; font-size: 16px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 18px; }
+.btn { border-radius: 12px; height: 42px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+.chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 13px; font-size: 13px; font-weight: 700; }
+.bar { height: 9px; border-radius: 5px; background: #e6e9f2; }
+.row { display: grid; grid-template-columns: 70px 1fr 1.25fr 140px; align-items: center; height: 54px; padding: 0 20px; border-top: 1px solid var(--line); font-size: 17px; position: relative; }
+.kpi { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.kpi b { display: block; font-family: "Bricolage"; font-size: 34px; }
+.kpi span { font-size: 14px; color: var(--ink2); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="beam" class="abs"></div>
+
+  <!-- 1. Agenda -->
+  <section class="scene" id="s1">
+    <div class="abs cap"><div class="step"><i></i>1 sur 6</div><h2>Lundi matin, l'agenda de la semaine entre dans Éclaira.</h2><p>Les rendez-vous qui demandent un consentement sont repérés tout seuls.</p></div>
+    <div class="abs card" style="left:640px; top:150px; width:590px; overflow:hidden">
+      <div style="padding:16px 20px; font-family:Bricolage; font-weight:700; font-size:20px; display:flex; justify-content:space-between"><span>Semaine du 27 octobre</span><span style="color:var(--ink2); font-weight:500; font-size:16px">agenda.csv</span></div>
+      <div id="rows"></div>
+    </div>
+  </section>
+
+  <!-- 2. SMS -->
+  <section class="scene" id="s2">
+    <div class="abs cap"><div class="step"><i></i>2 sur 6</div><h2>72 heures avant, chaque patient reçoit son lien.</h2><p>Par SMS ou par e-mail. Aucune donnée de santé dans le message.</p></div>
+    <div class="abs phone" id="ph2"><div class="screen" style="background:#e9ecf4">
+      <div class="sbar"><span>09:41</span><span>●●●</span></div>
+      <div style="text-align:center; font-size:13px; color:var(--ink2); margin-top:60px">Messages · maintenant</div>
+      <div id="sms" class="abs" style="left:16px; right:16px; top:150px; background:#fff; border-radius:20px; padding:16px 18px; font-size:16px; line-height:1.4; box-shadow:0 8px 20px -10px rgba(0,0,0,.25)">
+        <b>Dr Gross</b> : merci de compléter vos documents avant votre rendez-vous du 30/10.<br><span style="color:var(--action)">eclaira.fr/p/7Gk2…</span>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 3. Summary + full text -->
+  <section class="scene" id="s3">
+    <div class="abs cap"><div class="step"><i></i>3 sur 6</div><h2>Il lit l'essentiel. Le texte complet reste à un geste.</h2><p>Un résumé validé par le médecin, et son document original en entier.</p></div>
+    <div class="abs phone"><div class="screen">
+      <div class="sbar"><span>09:43</span><span>●●●</span></div>
+      <div class="apphead"><svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark"/></svg>éclaira</div>
+      <div style="padding:14px">
+        <div class="card" style="padding:16px; position:relative">
+          <div style="font-family:Bricolage; font-weight:700; font-size:17px">8. Risques possibles</div>
+          <ul style="margin:10px 0 0; padding-left:18px; font-size:14px; line-height:1.45">
+            <li>Le plus souvent : douleur passagère, petit hématome.</li>
+            <li>Rares mais graves : infection, allergie, rupture de tendon.</li>
+            <li>Fièvre ou rougeur : appelez le cabinet ou le 15.</li>
+          </ul>
+          <div id="more" style="margin-top:12px; border:1px solid var(--line); border-radius:12px; overflow:hidden">
+            <div style="height:40px; display:flex; align-items:center; padding:0 12px; color:var(--action); font-weight:700; font-size:14px">Lire le texte complet</div>
+            <div id="moreBody" style="height:0; overflow:hidden; padding:0 12px">
+              <div class="bar" style="width:96%; margin-top:6px"></div><div class="bar" style="width:88%; margin-top:8px"></div><div class="bar" style="width:92%; margin-top:8px"></div><div class="bar" style="width:70%; margin-top:8px"></div><div class="bar" style="width:84%; margin-top:8px"></div><div class="bar" style="width:60%; margin-top:8px"></div>
+            </div>
+          </div>
+          <div id="lu" class="btn" style="margin-top:12px; border:1px solid #9fb3cb; color:var(--action)">J'ai lu cette partie</div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 4. Questionnaire -->
+  <section class="scene" id="s4">
+    <div class="abs cap"><div class="step"><i></i>4 sur 6</div><h2>Il répond au questionnaire de sécurité.</h2><p>Un « oui » ouvre une question précise, et devient une alerte pour le médecin.</p></div>
+    <div class="abs phone"><div class="screen">
+      <div class="sbar"><span>09:46</span><span>●●●</span></div>
+      <div class="apphead"><svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark"/></svg>éclaira</div>
+      <div style="padding:14px">
+        <div class="card" style="padding:16px">
+          <div style="font-size:16px; font-weight:700; line-height:1.35">Prenez-vous un traitement anticoagulant ou antiagrégant ?</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px">
+            <div id="yes" class="btn" style="border:1px solid #c9d4e2">Oui</div><div class="btn" style="border:1px solid #c9d4e2">Non</div>
+          </div>
+          <div id="detail" style="opacity:0">
+            <div style="font-size:14px; font-weight:700; margin-top:14px">Nom du traitement</div>
+            <div style="height:44px; border:1px solid #9fb3cb; border-radius:12px; margin-top:6px; display:flex; align-items:center; padding:0 12px; font-size:16px"><span id="typed"></span><span id="caret" style="width:2px; height:20px; background:var(--ink); margin-left:2px"></span></div>
+            <div style="margin-top:12px; background:#fff3e0; color:#7a3e00; border-radius:12px; padding:10px 12px; font-size:13px; line-height:1.4">Votre traitement sera vérifié par le médecin.</div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 5. Signature -->
+  <section class="scene" id="s5">
+    <div class="abs cap"><div class="step"><i></i>5 sur 6</div><h2>Il signe du doigt, puis confirme par un code.</h2><p>Signature électronique au sens du règlement eIDAS, via un prestataire certifié.</p></div>
+    <div class="abs phone"><div class="screen">
+      <div class="sbar"><span>09:48</span><span>●●●</span></div>
+      <div class="apphead"><svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark"/></svg>éclaira</div>
+      <div style="padding:14px">
+        <div style="font-family:Bricolage; font-weight:700; font-size:18px; margin:4px 2px 10px">Votre signature</div>
+        <div class="card" style="height:150px; border:2px dashed #9fb3cb; display:flex; align-items:center; justify-content:center">
+          <svg width="240" height="100" viewBox="0 0 240 100" fill="none" stroke="#1d2145" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="sig" d="M14 66c12-30 22-42 28-34s-8 36 0 38 18-40 26-42 4 34 12 34 14-26 22-26 6 20 14 20 20-16 34-18 30 6 54 2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg>
+        </div>
+        <div style="font-size:14px; font-weight:700; margin:16px 2px 8px">Code reçu par SMS</div>
+        <div id="otp" style="display:grid; grid-template-columns:repeat(6,1fr); gap:6px"></div>
+        <div id="signed" class="btn" style="margin-top:16px; background:var(--action); color:#fff">Valider et signer</div>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- 6. Dashboard -->
+  <section class="scene" id="s6">
+    <div class="abs cap"><div class="step"><i></i>6 sur 6</div><h2>Le cabinet voit tout, avant le geste.</h2><p>Qui a signé, qui relancer, et les réponses qui demandent un appel.</p></div>
+    <div class="abs" style="left:620px; top:120px; width:610px">
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px">
+        <div class="kpi"><b id="k1">0</b><span>Signés</span></div>
+        <div class="kpi"><b>1</b><span>En attente</span></div>
+        <div class="kpi" style="background:#fff3e0; border-color:#f2c894"><b style="color:#7a3e00">1</b><span style="color:#7a3e00">Alerte à vérifier</span></div>
+      </div>
+      <div id="alert" class="card" style="margin-top:16px; padding:18px; border-color:#f2c894; background:#fff8ee; display:flex; gap:14px; align-items:center">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7a3e00" stroke-width="2" aria-hidden="true"><path d="M12 3l9.5 17h-19L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+        <div style="flex:1"><div style="font-weight:700; font-size:17px">14:00 · Injection de PRP</div><div style="font-size:15px; color:var(--ink2)">Antiagrégant déclaré : Kardégic 75 mg</div></div>
+        <div id="verif" class="btn" style="padding:0 16px; background:var(--action); color:#fff">Marquer vérifié</div>
+      </div>
+      <div class="card" style="margin-top:16px; overflow:hidden">
+        <div class="row" style="border-top:0"><b>09:00</b><span>Patient A</span><span style="color:var(--ink2)">Corticoïde, épaule</span><span class="chip" style="background:var(--okbg); color:var(--ok); justify-self:start">Signé</span></div>
+        <div class="row"><b>10:30</b><span>Patient B</span><span style="color:var(--ink2)">PRP, genou</span><span id="rowB" class="chip" style="background:#eef1f5; color:#3a4a5e; justify-self:start">Envoyé</span></div>
+        <div class="row"><b>14:00</b><span>Patient C</span><span style="color:var(--ink2)">PRP, Achille</span><span class="chip" style="background:var(--okbg); color:var(--ok); justify-self:start">Signé</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. End card -->
+  <section class="scene" id="s7" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px">
+    <svg width="440" height="120" viewBox="0 0 440 120" aria-hidden="true"><use href="#wordmark"/></svg>
+    <div style="font-family:Bricolage; font-weight:600; font-size:34px; letter-spacing:-0.01em">Le consentement éclairé, avant le rendez-vous.</div>
+    <div style="font-size:22px; color:var(--ink2)">eclaira.fr</div>
+  </section>
+
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="mark" viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="16" fill="#1d2145"/>
+        <path d="M18 37h28c0-8.4-6-15-14-15s-14 6.6-14 15 6 15 14 15c4.8 0 8.6-2 11-5.2" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M33 16.5 44.5 6.5 47 10 35.6 18.6z" fill="#f5b53f"/>
+      </symbol>
+      <symbol id="wordmark" viewBox="0 0 440 120">
+        <use href="#mark" x="0" y="14" width="92" height="92"/>
+        <text x="112" y="90" font-family="Bricolage" font-weight="700" font-size="84" letter-spacing="-3" fill="#1d2145">éclaira</text>
+      </symbol>
+    </defs>
+  </svg>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => 1 - Math.pow(1 - x, 3);
+const inout = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+
+// Scene windows (seconds). Total 38 s.
+const S = { s1: [0, 6.2], s2: [6.2, 11.6], s3: [11.6, 17.6], s4: [17.6, 23.6], s5: [23.6, 29.4], s6: [29.4, 34.8], s7: [34.8, 38] };
+export_duration = 38;
+
+const AGENDA = [
+  ["09:00", "Hélène R.", "Infiltration PRP", true],
+  ["09:30", "Hugo B.", "Infiltration corticoïde", true],
+  ["10:00", "Inès G.", "Première consultation", false],
+  ["11:00", "Louis M.", "Acide hyaluronique", true],
+  ["14:00", "Chloé F.", "Contrôle", false],
+  ["15:30", "Marc L.", "Infiltration rachidienne", true],
+];
+$("rows").innerHTML = AGENDA.map(([h, n, m, c], i) => `<div class="row" id="r${i}"><b>${h}</b><span>${n}</span><span style="color:var(--ink2)">${m}</span><span class="chip" id="c${i}" style="justify-self:start; opacity:0; ${c ? "background:#fdf0d5; color:#7a4a00" : "background:#eef1f5; color:#5b6680"}">${c ? "Consentement" : "Sans objet"}</span></div>`).join("");
+$("otp").innerHTML = "482917".split("").map((d, i) => `<div style="height:44px; border:1px solid #9fb3cb; border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:Bricolage; font-weight:700; font-size:22px"><span id="d${i}" style="opacity:0">${d}</span></div>`).join("");
+
+// Beam targets per scene: [x, y, angleDeg, scale]
+const BEAM = { s1: [560, 230, 8, 0.9], s2: [700, 120, -12, 0.7], s3: [700, 330, -6, 0.75], s4: [700, 300, -4, 0.75], s5: [700, 200, -10, 0.75], s6: [520, 170, 4, 0.9], s7: [160, 220, 0, 1.1] };
+
+function sceneOpacity(t, [a, b], first, last) {
+  const fin = first ? 1 : ease(prog(t, a, a + 0.45));
+  const fout = last ? 1 : 1 - prog(t, b - 0.35, b);
+  return t < a || t > b ? 0 : fin * fout;
+}
+
+window.render = function (t) {
+  const keys = Object.keys(S);
+  keys.forEach((k, i) => {
+    const o = sceneOpacity(t, S[k], i === 0, i === keys.length - 1);
+    const el = $(k);
+    el.style.opacity = o;
+    el.style.transform = `translateY(${(1 - o) * 10}px)`;
+  });
+
+  // Beam glides between scene targets.
+  let cur = keys.findIndex((k) => t >= S[k][0] && t <= S[k][1]);
+  if (cur < 0) cur = keys.length - 1;
+  const k = keys[cur];
+  const prev = BEAM[keys[Math.max(0, cur - 1)]];
+  const target = BEAM[k];
+  const m = cur === 0 ? 1 : inout(prog(t, S[k][0] - 0.2, S[k][0] + 0.9));
+  const lerp = (i) => prev[i] + (target[i] - prev[i]) * m;
+  $("beam").style.transform = `translate(${lerp(0) - 300}px, ${lerp(1) - 130}px) rotate(${lerp(2)}deg) scale(${lerp(3)})`;
+
+  // 1. Agenda rows, then consent chips light up.
+  AGENDA.forEach((r, i) => {
+    const p = ease(prog(t, 0.5 + i * 0.22, 0.9 + i * 0.22));
+    $("r" + i).style.opacity = p;
+    $("r" + i).style.transform = `translateX(${(1 - p) * 20}px)`;
+    const c = ease(prog(t, 2.6 + i * 0.25, 2.9 + i * 0.25));
+    $("c" + i).style.opacity = c;
+    $("r" + i).style.background = r[3] ? `rgba(245,181,63,${0.14 * c})` : `transparent`;
+    $("r" + i).style.boxShadow = r[3] ? `inset 4px 0 0 rgba(245,181,63,${c})` : "none";
+  });
+
+  // 2. SMS arrives.
+  const sp = ease(prog(t, 7.2, 7.8));
+  $("sms").style.opacity = sp;
+  $("sms").style.transform = `translateY(${(1 - sp) * -30}px) scale(${0.96 + 0.04 * sp})`;
+
+  // 3. Full text expands, then "Lu".
+  const ep = inout(prog(t, 13.6, 14.4)) * (1 - inout(prog(t, 15.6, 16.1)));
+  $("moreBody").style.height = `${ep * 118}px`;
+  $("moreBody").style.paddingBottom = `${ep * 12}px`;
+  const lu = t > 16.3;
+  $("lu").textContent = lu ? "✓ Lu" : "J'ai lu cette partie";
+  $("lu").style.background = lu ? "var(--okbg)" : "#fff";
+  $("lu").style.color = lu ? "var(--ok)" : "var(--action)";
+  $("lu").style.borderColor = lu ? "#9acdb2" : "#9fb3cb";
+
+  // 4. Oui, then typing.
+  const yes = t > 19.0;
+  $("yes").style.background = yes ? "var(--action)" : "#fff";
+  $("yes").style.color = yes ? "#fff" : "var(--ink)";
+  $("yes").style.borderColor = yes ? "var(--action)" : "#c9d4e2";
+  $("detail").style.opacity = ease(prog(t, 19.2, 19.6));
+  const word = "Kardégic 75 mg";
+  $("typed").textContent = word.slice(0, Math.floor(prog(t, 19.8, 21.6) * word.length));
+  $("caret").style.opacity = Math.floor(t * 2.4) % 2 ? 1 : 0;
+
+  // 5. Signature draws, code fills, signed.
+  $("sig").style.strokeDashoffset = 1 - inout(prog(t, 24.4, 26.2));
+  "482917".split("").forEach((_, i) => ($("d" + i).style.opacity = t > 26.6 + i * 0.22 ? 1 : 0));
+  const done = t > 28.2;
+  $("signed").textContent = done ? "✓ Signé" : "Valider et signer";
+  $("signed").style.background = done ? "var(--ok)" : "var(--action)";
+
+  // 6. Dashboard: count up, alert reviewed, row turns signed.
+  $("k1").textContent = String(Math.round(ease(prog(t, 30, 31.4)) * 6));
+  const ver = t > 32.9;
+  $("verif").textContent = ver ? "✓ Vérifié" : "Marquer vérifié";
+  $("verif").style.background = ver ? "var(--ok)" : "var(--action)";
+  $("alert").style.boxShadow = `0 0 0 ${4 * (1 - prog(t, 31.4, 32.6)) * prog(t, 30.6, 31.0)}px rgba(245,181,63,.6)`;
+  const rb = t > 33.6;
+  $("rowB").textContent = rb ? "Signé" : "Envoyé";
+  $("rowB").style.background = rb ? "var(--okbg)" : "#eef1f5";
+  $("rowB").style.color = rb ? "var(--ok)" : "#3a4a5e";
+};
+window.render(0);
+</script>
+</body>
+</html>

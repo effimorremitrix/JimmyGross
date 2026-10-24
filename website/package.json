@@ -1,0 +1,14 @@
+{
+  "name": "eclaira-website",
+  "private": true,
+  "scripts": {
+    "build": "python3 build.py",
+    "video:preview": "node video/frames.mjs preview",
+    "video:frames": "node video/frames.mjs full 30"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5",
+    "@fontsource/atkinson-hyperlegible": "^5",
+    "playwright": "^1"
+  }
+}
