@@ -1,3 +1,4 @@
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { applicableQuestions, computeFlags, reviewedFlagChanges, validateAnswers, withdrawnAfterReviewFlag } from "@/domain/precheck";
 import { advance, atLeast, isTerminal } from "@/domain/status";
@@ -98,6 +99,13 @@ describe("PDF text", () => {
     expect(pdfSafe("Être à l'œil, « oui »")).toBe("Être à l'œil, « oui »");
     expect(pdfSafe("≥ 6 semaines → ☐")).toBe(">= 6 semaines -> [ ]");
     expect(pdfSafe("emoji 😀")).not.toMatch(/😀/);
+  });
+
+  it("renders the Éclaira name in the standard PDF fonts", async () => {
+    expect(pdfSafe("Éclaira")).toBe("Éclaira");
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    expect(() => font.encodeText(pdfSafe("Éclaira : votre code"))).not.toThrow();
   });
 });
 

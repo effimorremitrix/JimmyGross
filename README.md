@@ -1,4 +1,4 @@
-# Consentza
+# Éclaira
 
 Remote informed consent for French clinics on Doctolib. The patient reads the information sheet, answers the pre-procedure safety questionnaire and signs on their phone before the appointment; the practice sees who signed, who is pending, and which answers need a look before the act.
 
@@ -35,7 +35,7 @@ The app connects as `eclaira_app`, which can only append to the evidence log; mi
 - **Own Postgres 16:** create the roles with `ops/postgres/01-create-roles.sql`, and for the demo seed also run `GRANT SET ON PARAMETER session_replication_role TO eclaira_owner;` as a superuser (local only).
 - Check the boundary any time: `psql "$DATABASE_URL" -f ops/postgres/03-verify-boundary.sql`.
 
-Demo login: `dr.gross@demo.consentza.fr` / `consentza-demo` (practitioner) or `secretariat@demo.consentza.fr` (assistant). The seed prints patient links with their birth dates and writes `samples/agenda-semaine-demo.csv` (next week) to try the import. With `DEMO_MODE=true`, the SMS code is shown on screen.
+Demo login: `dr.gross@demo.eclaira.fr` / `eclaira-demo` (practitioner) or `secretariat@demo.eclaira.fr` (assistant). The seed prints patient links with their birth dates and writes `samples/agenda-semaine-demo.csv` (next week) to try the import. With `DEMO_MODE=true`, the SMS code is shown on screen.
 
 ## Tests
 
@@ -55,5 +55,14 @@ The end-to-end test drives both patient flows (SES and AES), the dashboard, PDF 
 4. Scheduler: call `POST /api/cron/send-due` every 5 to 15 minutes with `Authorization: Bearer $CRON_SECRET`.
 5. `DEMO_MODE=false`. Re-seed nothing: create the practice and accounts by hand.
 6. DPIA, DPA with the practice, privacy notice. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md).
+
+## Renamed from Consentza
+
+The product was called Consentza. User-facing text now says Éclaira; a few internal identifiers keep the old name on purpose so existing environments keep working:
+
+- Session cookies stay `cz_staff` and `cz_patient` (renaming them would sign everyone out and invalidate open patient sessions).
+- The local Docker bootstrap user and database stay `consentza`, so existing volumes and `.env` files still connect.
+- Demo accounts moved to `@demo.eclaira.fr` with the default password `eclaira-demo`. A database seeded before the rename keeps the old `@demo.consentza.fr` logins until you run `npm run db:seed` again, which replaces them. A `SEED_PASSWORD` already set in `.env` still applies to both the seed and the e2e tests.
+- `EMAIL_FROM` defaults to `Éclaira <no-reply@eclaira.fr>`; an `EMAIL_FROM` already set in `.env` wins. Sending from `eclaira.fr` needs that domain's SPF/DKIM set up with the SMTP provider first.
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/COMPLIANCE.md](docs/COMPLIANCE.md) · [docs/PILOT.md](docs/PILOT.md)

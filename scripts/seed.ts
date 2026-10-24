@@ -29,7 +29,7 @@ async function main() {
   // The owner role (eclaira_owner); DATABASE_URL is the fallback for local dev.
   const pool = new Pool({ connectionString: process.env.DATABASE_OWNER_URL || process.env.DATABASE_URL });
   const db = drizzle(pool, { schema });
-  const password = process.env.SEED_PASSWORD ?? "consentza-demo";
+  const password = process.env.SEED_PASSWORD ?? "eclaira-demo";
 
   // Wipe demo practice (child tables first).
   const existing = await db.query.practices.findFirst({ where: eq(schema.practices.name, "Cabinet du Dr Jimmy Gross") });
@@ -75,8 +75,8 @@ async function main() {
   const [doctor] = await db
     .insert(schema.users)
     .values([
-      { practiceId: practice.id, email: "dr.gross@demo.consentza.fr", name: "Dr Jimmy Gross", passwordHash: hash, role: "practitioner" },
-      { practiceId: practice.id, email: "secretariat@demo.consentza.fr", name: "Secrétariat", passwordHash: hash, role: "assistant" },
+      { practiceId: practice.id, email: "dr.gross@demo.eclaira.fr", name: "Dr Jimmy Gross", passwordHash: hash, role: "practitioner" },
+      { practiceId: practice.id, email: "secretariat@demo.eclaira.fr", name: "Secrétariat", passwordHash: hash, role: "assistant" },
     ])
     .returning();
 
@@ -258,7 +258,7 @@ async function main() {
 
   console.log("\nSeeded the demo practice.");
   console.log("Demo agenda export (next week): samples/agenda-semaine-demo.csv");
-  console.log(`Login: dr.gross@demo.consentza.fr / ${password}  (or secretariat@demo.consentza.fr)`);
+  console.log(`Login: dr.gross@demo.eclaira.fr / ${password}  (or secretariat@demo.eclaira.fr)`);
   console.log("Patient links to try:");
   for (const l of links) console.log(`  ${l}`);
   await pool.end();

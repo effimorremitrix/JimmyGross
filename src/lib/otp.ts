@@ -28,7 +28,7 @@ export async function issueOtp(
   await db.insert(schema.otpChallenges).values({ requestId, purpose, codeHash: sha256(code), expiresAt: new Date(Date.now() + TTL_MS) });
   const what = purpose === "sign" ? "de signature" : "d'accès";
   if (to.phone) {
-    await smsSender().send(to.phone, `Consentza : votre code ${what} est ${code}. Il expire dans 10 minutes.`);
+    await smsSender().send(to.phone, `Éclaira : votre code ${what} est ${code}. Il expire dans 10 minutes.`);
     return { code, sentTo: `au ${maskPhone(to.phone)}` };
   }
   if (to.email) {

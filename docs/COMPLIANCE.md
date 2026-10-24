@@ -5,7 +5,7 @@ Not legal advice. Items to close with a lawyer, the DPO and Dr Gross's professio
 ## Health data hosting (HDS)
 
 - [ ] App and Postgres on an HDS-certified host (e.g. Scaleway or OVHcloud HDS offers). Backups on the same certified perimeter.
-- [ ] Check whether Consentza's own operating role (application administration, run) also needs its own HDS certification, or is covered by the host's scope.
+- [ ] Check whether Éclaira's own operating role (application administration, run) also needs its own HDS certification, or is covered by the host's scope.
 - [ ] Signature provider (Yousign) DPA covering health data; send it only the document and signer identity.
 - [ ] SMS and e-mail providers receive no health data (message = practitioner, date, link). Prefer EU providers. The practitioner's name can hint at a specialty: confirm this is acceptable.
 - [ ] Agenda exports contain patient data: they are processed in memory and only the file hash is kept; staff should delete the exported file from their computer after import.
@@ -13,7 +13,7 @@ Not legal advice. Items to close with a lawyer, the DPO and Dr Gross's professio
 
 ## GDPR
 
-- [ ] Roles: the practice is controller, Consentza is processor (Art. 28 DPA with each practice).
+- [ ] Roles: the practice is controller, Éclaira is processor (Art. 28 DPA with each practice).
 - [ ] DPIA (AIPD): health data at scale, new technology. Template: CNIL PIA tool.
 - [ ] Privacy notice shown to patients (link on the identity screen).
 - [ ] Retention policy for consent records, aligned with the medical record retention rules; deletion job.
@@ -33,7 +33,7 @@ Not legal advice. Items to close with a lawyer, the DPO and Dr Gross's professio
 - [ ] Dr Gross reviews and approves the patient summaries on the Modèles page. Patients see summaries only after approval; the full original text stays one tap away, is in the signed PDF, and the consent statement says the patient had access to it. The evidence file records, per section, whether the full text was opened.
 - [ ] Decide whether "lu et approuvé" is needed (replaced by an explicit checkbox; usually no specific legal weight).
 - [ ] Two-step model: the patient consents to the planned act; the doctor confirms the act performed on the day. If it differs, the app flags it and a new consent is advised.
-- [ ] The paper form shows the doctor's signature as an image. In Consentza the doctor confirms as an authenticated user, logged in the evidence file.
+- [ ] The paper form shows the doctor's signature as an image. In Éclaira the doctor confirms as an authenticated user, logged in the evidence file.
 
 ## Database roles (evidence integrity)
 

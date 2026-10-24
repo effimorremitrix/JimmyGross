@@ -153,7 +153,7 @@ export async function buildConsentPdf(
   const doc = await PDFDocument.create();
   doc.setTitle(pdfSafe(`${input.templateTitle} - ${input.patient.lastName.toUpperCase()} ${input.patient.firstName}`));
   doc.setAuthor(pdfSafe(input.practitionerName));
-  doc.setSubject(`Consentza request ${input.requestId}`);
+  doc.setSubject(`Éclaira request ${input.requestId}`);
   doc.setLanguage("fr-FR");
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
