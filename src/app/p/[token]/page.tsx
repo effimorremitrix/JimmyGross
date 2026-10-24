@@ -50,7 +50,7 @@ export default async function PatientPage({ params }: PageProps<"/p/[token]">) {
   if (state === "needs_identity") {
     return (
       <Shell header={header}>
-        <IdentityGate token={token} firstName={patient.firstName} />
+        <IdentityGate token={token} firstName={patient.firstName} mode={patient.birthDate ? "birth_date" : "code"} demoMode={config().DEMO_MODE} />
       </Shell>
     );
   }
@@ -95,7 +95,8 @@ export default async function PatientPage({ params }: PageProps<"/p/[token]">) {
     );
   }
 
-  const reads = await db.query.readingEvents.findMany({ where: eq(schema.readingEvents.requestId, r.id) });
+  const allReads = await db.query.readingEvents.findMany({ where: eq(schema.readingEvents.requestId, r.id) });
+  const reads = allReads.filter((e) => e.acknowledgedAt);
   const status = fresh?.status ?? r.status;
   const initialStep: FlowStep =
     status === "awaiting_otp"
@@ -116,7 +117,6 @@ export default async function PatientPage({ params }: PageProps<"/p/[token]">) {
         firstName={patient.firstName}
         fullName={`${patient.firstName} ${patient.lastName}`}
         birthDate={patient.birthDate}
-        phoneMasked={`${patient.phone.replace(/\D/g, "").slice(0, 2)} •• •• •• ${patient.phone.replace(/\D/g, "").slice(-2)}`}
         practicePhone={practice.phone}
         appointmentLabel={new Intl.DateTimeFormat("fr-FR", {
           weekday: "long",
@@ -134,6 +134,8 @@ export default async function PatientPage({ params }: PageProps<"/p/[token]">) {
         intro={version.intro}
         sections={version.sections}
         readIds={reads.map((e) => e.sectionId)}
+        useSummaries={!!version.summariesApprovedAt || config().DEMO_MODE}
+        fullTextIds={allReads.filter((e) => e.fullTextOpenedAt).map((e) => e.sectionId)}
         questions={applicableQuestions(version.questions, r.plannedAct)}
         initialAnswers={r.answers ?? null}
         consent={version.consent}

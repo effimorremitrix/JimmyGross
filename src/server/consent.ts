@@ -1,16 +1,20 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { audit, type AuditActor } from "@/lib/audit";
 import { config } from "@/lib/config";
 import { newLinkToken, sha256 } from "@/lib/crypto";
+import { emailSender, linkEmail, maskEmail } from "@/lib/email";
 import { providerByName } from "@/lib/signature";
 import type { ProviderRef } from "@/lib/signature/types";
-import { smsSender } from "@/lib/sms";
+import { maskPhone, smsSender } from "@/lib/sms";
 import { advance } from "@/domain/status";
 import type { RequestStatus } from "@/domain/types";
+export { pickChannel, sendTimeFor } from "@/domain/delivery";
 
 export type ConsentRequest = typeof schema.consentRequests.$inferSelect;
+export type Patient = typeof schema.patients.$inferSelect;
+export type Channel = ConsentRequest["channel"];
 
 export function patientLink(token: string): string {
   return `${config().APP_URL.replace(/\/$/, "")}/p/${token}`;
@@ -33,36 +37,97 @@ export async function rotateToken(requestId: string): Promise<string> {
   return token;
 }
 
-/** Sends the link by SMS (no health data in the message). */
-export async function sendLinkSms(params: {
+/** Where the link goes, masked for display ("SMS 06 •• •• •• 12 + e-mail m•••@x.fr"). */
+export function deliveryLabel(channel: Channel, patient: Pick<Patient, "phone" | "email">): string {
+  const parts: string[] = [];
+  if ((channel === "sms" || channel === "sms_email") && patient.phone) parts.push(`SMS ${maskPhone(patient.phone)}`);
+  if ((channel === "email" || channel === "sms_email") && patient.email) parts.push(`e-mail ${maskEmail(patient.email)}`);
+  return parts.join(" + ") || "lien manuel";
+}
+
+/**
+ * Sends the link on the request's channel(s). Messages carry no health data:
+ * practitioner name, appointment date, link.
+ */
+export async function deliverLink(params: {
   request: ConsentRequest;
   token: string;
-  phone: string;
-  practitionerName: string;
+  patient: Patient;
+  practice: typeof schema.practices.$inferSelect;
   appointmentAt: Date;
   actor: AuditActor;
 }) {
-  const date = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", timeZone: "Europe/Paris" }).format(
+  const { request: r, patient, practice } = params;
+  const link = patientLink(params.token);
+  const dateLabel = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", timeZone: "Europe/Paris" }).format(
     params.appointmentAt,
   );
-  const body = `${params.practitionerName} : merci de compléter vos documents avant votre rendez-vous du ${date}. ${patientLink(params.token)}`;
-  await smsSender().send(params.phone, body);
+  const sent: string[] = [];
+  if ((r.channel === "sms" || r.channel === "sms_email") && patient.phone) {
+    await smsSender().send(
+      patient.phone,
+      `${practice.practitionerName} : merci de compléter vos documents avant votre rendez-vous du ${dateLabel}. ${link}`,
+    );
+    sent.push("sms");
+  }
+  if ((r.channel === "email" || r.channel === "sms_email") && patient.email) {
+    const m = linkEmail({ practitioner: practice.practitionerName, dateLabel, link, practicePhone: practice.phone });
+    await emailSender().send(patient.email, m.subject, m.text, m.html);
+    sent.push("email");
+  }
+  if (!sent.length) throw new Error("Aucun moyen de contact pour ce patient.");
   await db
     .update(schema.consentRequests)
     .set({
-      status: advance(params.request.status, "sent"),
+      status: advance(r.status, "sent"),
       lastSentAt: new Date(),
-      sendCount: params.request.sendCount + 1,
+      scheduledSendAt: null,
+      sendCount: r.sendCount + 1,
       updatedAt: new Date(),
     })
-    .where(eq(schema.consentRequests.id, params.request.id));
-  await audit({
-    practiceId: params.request.practiceId,
-    requestId: params.request.id,
-    actor: params.actor,
-    type: "request.sent",
-    data: { channel: "sms" },
-  });
+    .where(eq(schema.consentRequests.id, r.id));
+  await audit({ practiceId: r.practiceId, requestId: r.id, actor: params.actor, type: "request.sent", data: { channels: sent }, withRequestMeta: params.actor !== "system" });
+}
+
+/** Rotates the token and sends: used by reminders, immediate sends and the scheduler. */
+export async function sendNow(requestId: string, actor: AuditActor) {
+  const r = await db.query.consentRequests.findFirst({ where: eq(schema.consentRequests.id, requestId) });
+  if (!r) throw new Error("Demande introuvable");
+  const [patient, appt, practice] = await Promise.all([
+    db.query.patients.findFirst({ where: eq(schema.patients.id, r.patientId) }),
+    db.query.appointments.findFirst({ where: eq(schema.appointments.id, r.appointmentId) }),
+    db.query.practices.findFirst({ where: eq(schema.practices.id, r.practiceId) }),
+  ]);
+  if (!patient || !appt || !practice) throw new Error("Données manquantes");
+  const token = await rotateToken(r.id);
+  await deliverLink({ request: r, token, patient, practice, appointmentAt: appt.scheduledAt, actor });
+}
+
+/** Sends every link whose scheduled time has come. Returns counts; errors don't stop the batch. */
+export async function sendDue(now = new Date()): Promise<{ sent: number; failed: number }> {
+  const due = await db
+    .select({ id: schema.consentRequests.id })
+    .from(schema.consentRequests)
+    .where(
+      and(
+        isNotNull(schema.consentRequests.scheduledSendAt),
+        lte(schema.consentRequests.scheduledSendAt, now),
+        eq(schema.consentRequests.status, "created"),
+      ),
+    )
+    .limit(500);
+  let sent = 0;
+  let failed = 0;
+  for (const { id } of due) {
+    try {
+      await sendNow(id, "system");
+      sent++;
+    } catch (e) {
+      failed++;
+      console.error(`[send-due] ${id}`, e);
+    }
+  }
+  return { sent, failed };
 }
 
 export async function setStatus(r: ConsentRequest, next: RequestStatus) {
@@ -76,13 +141,14 @@ export async function setStatus(r: ConsentRequest, next: RequestStatus) {
   return status;
 }
 
-export function providerRef(r: ConsentRequest, phone: string): ProviderRef {
+export function providerRef(r: ConsentRequest, patient: Pick<Patient, "phone" | "email">): ProviderRef {
   return {
     requestId: r.id,
     providerRequestId: r.providerRequestId ?? "",
     signerId: r.providerSignerId ?? "",
     documentId: r.providerDocumentId ?? "",
-    phone,
+    phone: patient.phone,
+    email: patient.email,
   };
 }
 
@@ -101,7 +167,7 @@ export async function finalizeSigned(requestId: string, actor: AuditActor): Prom
   const patient = await db.query.patients.findFirst({ where: eq(schema.patients.id, r.patientId) });
   if (!patient) return false;
   const provider = providerByName(r.providerName);
-  const ref = providerRef(r, patient.phone);
+  const ref = providerRef(r, patient);
   if (provider.name !== "mock" && !(await provider.isDone(ref))) return false;
 
   const signedAt = r.signedAt ?? new Date();

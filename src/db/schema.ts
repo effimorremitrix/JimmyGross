@@ -36,7 +36,8 @@ export const requestStatusEnum = pgEnum("request_status", [
   "expired",
   "cancelled",
 ]);
-export const channelEnum = pgEnum("channel", ["sms", "email", "manual_link"]);
+export const channelEnum = pgEnum("channel", ["sms", "email", "sms_email", "manual_link"]);
+export const otpPurposeEnum = pgEnum("otp_purpose", ["sign", "access"]);
 export const roleEnum = pgEnum("role", ["practitioner", "assistant", "admin"]);
 export const flagSeverityEnum = pgEnum("flag_severity", ["info", "warn", "block"]);
 export const documentKindEnum = pgEnum("document_kind", [
@@ -99,6 +100,9 @@ export const templateVersions = pgTable(
     consent: jsonb("consent").$type<ConsentBlock>().notNull(),
     questions: jsonb("questions").$type<Question[]>().notNull(),
     signatureLevel: signatureLevelEnum("signature_level").notNull().default("SES"),
+    /** Patient-facing summaries must be approved by the practitioner before live use. */
+    summariesApprovedAt: timestamp("summaries_approved_at", { withTimezone: true }),
+    summariesApprovedById: uuid("summaries_approved_by_id").references(() => users.id),
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("template_versions_uq").on(t.templateId, t.version)],
@@ -119,8 +123,9 @@ export const patients = pgTable("patients", {
   practiceId: uuid("practice_id").notNull().references(() => practices.id),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  birthDate: text("birth_date").notNull(), // YYYY-MM-DD
-  phone: text("phone").notNull(),
+  /** YYYY-MM-DD. Optional: agenda exports may not carry it (access then uses a code). */
+  birthDate: text("birth_date"),
+  phone: text("phone"),
   email: text("email"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -173,6 +178,9 @@ export const consentRequests = pgTable(
     confirmedLocation: text("confirmed_location"),
     confirmedById: uuid("confirmed_by_id").references(() => users.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    /** When the link should go out automatically (lead time before the appointment). */
+    scheduledSendAt: timestamp("scheduled_send_at", { withTimezone: true }),
+    importBatchId: uuid("import_batch_id"),
     lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
     sendCount: integer("send_count").notNull().default(0),
     createdById: uuid("created_by_id").references(() => users.id),
@@ -194,7 +202,9 @@ export const readingEvents = pgTable(
     requestId: uuid("request_id").notNull().references(() => consentRequests.id),
     sectionId: text("section_id").notNull(),
     visibleMs: integer("visible_ms").notNull().default(0),
-    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }).notNull(),
+    /** When the patient opened the full original text of this section (null: summary only). */
+    fullTextOpenedAt: timestamp("full_text_opened_at", { withTimezone: true }),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
   },
   (t) => [uniqueIndex("reading_events_uq").on(t.requestId, t.sectionId)],
 );
@@ -225,6 +235,7 @@ export const documents = pgTable("documents", {
 export const otpChallenges = pgTable("otp_challenges", {
   id: uuid("id").primaryKey().defaultRandom(),
   requestId: uuid("request_id").notNull().references(() => consentRequests.id),
+  purpose: otpPurposeEnum("purpose").notNull().default("sign"),
   codeHash: text("code_hash").notNull(),
   attempts: integer("attempts").notNull().default(0),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -247,3 +258,16 @@ export const auditEvents = pgTable(
   },
   (t) => [index("audit_events_request_idx").on(t.requestId, t.at)],
 );
+
+/** One uploaded agenda file and what it produced. */
+export const importBatches = pgTable("import_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  practiceId: uuid("practice_id").notNull().references(() => practices.id),
+  filename: text("filename").notNull(),
+  sha256: text("sha256").notNull(),
+  rows: integer("rows").notNull(),
+  created: integer("created").notNull(),
+  skipped: integer("skipped").notNull(),
+  createdById: uuid("created_by_id").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

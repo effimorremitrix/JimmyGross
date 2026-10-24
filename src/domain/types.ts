@@ -4,7 +4,9 @@ export type SignatureLevel = "SES" | "AES";
 export interface InfoSection {
   id: string;
   title: string;
-  /** Paragraphs of body text. */
+  /** Short patient-facing summary (bullets). The full text stays one tap away. */
+  summary: string[];
+  /** Paragraphs of body text (the practitioner's original wording). */
   paragraphs: string[];
   /** Optional bullet lists, each with an optional heading and a tone. */
   callouts?: { heading: string; tone: "neutral" | "info" | "warn" | "danger" | "ok"; items: string[] }[];

@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button, cx, Icon } from "@/components/ui";
 import type { ConsentBlock, InfoSection, PrecheckAnswers, Question, SignatureLevel } from "@/domain/types";
-import { confirmOtp, markSectionRead, resendOtp, submitConsent, submitPrecheck } from "./actions";
+import { confirmOtp, markFullTextOpened, markSectionRead, resendOtp, submitConsent, submitPrecheck } from "./actions";
 import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
+
+type OtpInfo = { demoCode?: string; sentTo: string };
 
 export type FlowStep = "welcome" | "info" | "precheck" | "consent" | "id" | "otp";
 
@@ -14,8 +16,7 @@ interface Props {
   initialStep: FlowStep;
   firstName: string;
   fullName: string;
-  birthDate: string;
-  phoneMasked: string;
+  birthDate: string | null;
   practicePhone: string;
   appointmentLabel: string;
   visitReason: string;
@@ -26,6 +27,9 @@ interface Props {
   intro: string[];
   sections: InfoSection[];
   readIds: string[];
+  fullTextIds: string[];
+  /** Summaries are shown only once the practitioner approved them (or in demo). */
+  useSummaries: boolean;
   questions: Question[];
   initialAnswers: PrecheckAnswers | null;
   consent: ConsentBlock;
@@ -34,7 +38,7 @@ interface Props {
 
 export function PatientFlow(p: Props) {
   const [step, setStep] = useState<FlowStep>(p.initialStep);
-  const [otpInfo, setOtpInfo] = useState<{ demoCode?: string; phoneMasked: string }>({ phoneMasked: p.phoneMasked });
+  const [otpInfo, setOtpInfo] = useState<OtpInfo>({ sentTo: "sur votre téléphone ou par e-mail" });
   const signatureRef = useRef<string | null>(null);
   const ackRef = useRef(false);
 
@@ -136,7 +140,7 @@ function Welcome(p: Props & { onStart(): void }) {
       <div className="rounded-xl bg-brand-soft px-4 py-3 text-[14px] leading-relaxed">
         {p.level === "AES"
           ? "Signature avancée : vous signerez du doigt, puis nous vérifierons votre pièce d'identité et un code reçu par SMS."
-          : "Signature : vous signerez du doigt, puis confirmerez avec un code reçu par SMS."}
+          : "Signature : vous signerez du doigt, puis confirmerez avec un code à usage unique."}
       </div>
       <ul className="flex flex-col gap-1.5 text-[14px] leading-relaxed text-muted">
         {p.intro.map((t) => (
@@ -160,8 +164,29 @@ const TONE: Record<string, string> = {
   danger: "bg-danger-soft",
 };
 
+function FullText({ section }: { section: InfoSection }) {
+  return (
+    <div className="flex flex-col gap-3 text-[15px] leading-relaxed text-ink-2">
+      {section.paragraphs.map((t) => (
+        <p key={t}>{t}</p>
+      ))}
+      {section.callouts?.map((c) => (
+        <div key={c.heading} className={cx("rounded-xl px-4 py-3", TONE[c.tone])}>
+          <p className="font-semibold text-ink">{c.heading}</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {c.items.map((it) => (
+              <li key={it}>{it}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function InfoStep(p: Props & { onDone(): void }) {
   const [read, setRead] = useState<Set<string>>(new Set(p.readIds));
+  const [opened, setOpened] = useState<Set<string>>(new Set(p.fullTextIds));
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const visible = useRef<Record<string, number>>({});
@@ -202,6 +227,12 @@ function InfoStep(p: Props & { onDone(): void }) {
     if (next) nodes.current[next.id]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function openFull(id: string) {
+    if (opened.has(id)) return;
+    setOpened((s) => new Set(s).add(id));
+    void markFullTextOpened(p.token, id);
+  }
+
   const allRead = p.sections.every((s) => read.has(s.id));
 
   return (
@@ -210,8 +241,20 @@ function InfoStep(p: Props & { onDone(): void }) {
         Fiche d&apos;information
       </h1>
       <p className="text-[15px] leading-relaxed text-ink-2">
-        Lisez chaque partie puis confirmez. Vous pourrez poser toutes vos questions au médecin avant le geste.
+        {p.useSummaries
+          ? "Voici l'essentiel de chaque partie. Le texte complet du médecin est accessible sous chaque résumé. Lisez puis confirmez ; vous pourrez poser toutes vos questions au médecin avant le geste."
+          : "Lisez chaque partie puis confirmez. Vous pourrez poser toutes vos questions au médecin avant le geste."}
       </p>
+      <a
+        href={`/p/${p.token}/document`}
+        target="_blank"
+        rel="noopener"
+        className="inline-flex min-h-11 items-center gap-2 self-start text-[15px] font-medium text-brand underline-offset-2 hover:underline"
+      >
+        <Icon name="doc" />
+        Lire le document complet (PDF)
+        <span className="sr-only"> (s&apos;ouvre dans un nouvel onglet)</span>
+      </a>
       <p className="text-[14px] font-medium text-muted" aria-live="polite">
         {read.size} partie{read.size > 1 ? "s" : ""} lue{read.size > 1 ? "s" : ""} sur {p.sections.length}
       </p>
@@ -230,21 +273,31 @@ function InfoStep(p: Props & { onDone(): void }) {
             <h2 id={`h-${s.id}`} className="text-[17px] font-semibold">
               {s.title}
             </h2>
-            <div className="mt-2 flex flex-col gap-3 text-[15px] leading-relaxed text-ink-2">
-              {s.paragraphs.map((t) => (
-                <p key={t}>{t}</p>
-              ))}
-              {s.callouts?.map((c) => (
-                <div key={c.heading} className={cx("rounded-xl px-4 py-3", TONE[c.tone])}>
-                  <p className="font-semibold text-ink">{c.heading}</p>
-                  <ul className="mt-1 list-disc space-y-1 pl-5">
-                    {c.items.map((it) => (
-                      <li key={it}>{it}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            {p.useSummaries ? (
+              <>
+                <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 text-[15px] leading-relaxed text-ink">
+                  {s.summary.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+                <details
+                  className="group mt-3 rounded-xl border border-line"
+                  onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && openFull(s.id)}
+                >
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-[15px] font-medium text-brand [&::-webkit-details-marker]:hidden">
+                    <span>{opened.has(s.id) ? "Texte complet de cette partie" : "Lire le texte complet de cette partie"}</span>
+                    <Icon name="back" className="-rotate-90 transition-transform group-open:rotate-90" />
+                  </summary>
+                  <div className="border-t border-line px-4 py-3">
+                    <FullText section={s} />
+                  </div>
+                </details>
+              </>
+            ) : (
+              <div className="mt-2">
+                <FullText section={s} />
+              </div>
+            )}
             <button
               type="button"
               onClick={() => ack(s.id)}
@@ -398,7 +451,7 @@ function ConsentStep(
     onBack(): void;
     /** Returns true when the flow should start signing right away. */
     onReady(png: string, ack: boolean): boolean;
-    onOtp(info: { demoCode?: string; phoneMasked: string }): void;
+    onOtp(info: OtpInfo): void;
   },
 ) {
   const pad = useRef<SignaturePadHandle>(null);
@@ -407,7 +460,7 @@ function ConsentStep(
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const onInk = useCallback((v: boolean) => setHasInk(v), []);
-  const birth = useMemo(() => p.birthDate.split("-").reverse().join("/"), [p.birthDate]);
+  const birth = useMemo(() => p.birthDate?.split("-").reverse().join("/") ?? null, [p.birthDate]);
 
   function next() {
     const png = pad.current?.toPng();
@@ -419,7 +472,7 @@ function ConsentStep(
       const res = await submitConsent(p.token, { signaturePng: png, acknowledged: ack });
       if (!res.ok) return setError(res.error);
       if (res.mode === "redirect") window.location.assign(res.url);
-      else p.onOtp({ demoCode: res.demoCode, phoneMasked: res.phoneMasked });
+      else p.onOtp({ demoCode: res.demoCode, sentTo: res.sentTo });
     });
   }
 
@@ -431,8 +484,12 @@ function ConsentStep(
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-line bg-white p-4 text-[15px]">
         <dt className="text-muted">Patient</dt>
         <dd className="text-right font-semibold">{p.fullName}</dd>
-        <dt className="text-muted">Né(e) le</dt>
-        <dd className="text-right font-semibold">{birth}</dd>
+        {birth && (
+          <>
+            <dt className="text-muted">Né(e) le</dt>
+            <dd className="text-right font-semibold">{birth}</dd>
+          </>
+        )}
         <dt className="text-muted">Geste prévu</dt>
         <dd className="text-right font-semibold">{p.plannedAct}</dd>
         {p.plannedLocation && (
@@ -470,7 +527,7 @@ function ConsentStep(
           Retour
         </Button>
         <Button className="h-13 flex-1" disabled={!hasInk || !ack || pending} onClick={next}>
-          {pending ? "Préparation…" : p.level === "AES" ? "Continuer" : "Recevoir mon code SMS"}
+          {pending ? "Préparation…" : p.level === "AES" ? "Continuer" : "Recevoir mon code de signature"}
         </Button>
       </StickyBar>
     </section>
@@ -484,7 +541,7 @@ function IdStep(p: {
   token: string;
   onBack(): void;
   signature(): { png: string | null; ack: boolean };
-  onOtp(info: { demoCode?: string; phoneMasked: string }): void;
+  onOtp(info: OtpInfo): void;
 }) {
   const [picked, setPicked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -497,7 +554,7 @@ function IdStep(p: {
       const res = await submitConsent(p.token, { signaturePng: png, acknowledged: ack });
       if (!res.ok) return setError(res.error);
       if (res.mode === "redirect") window.location.assign(res.url);
-      else p.onOtp({ demoCode: res.demoCode, phoneMasked: res.phoneMasked });
+      else p.onOtp({ demoCode: res.demoCode, sentTo: res.sentTo });
     });
   }
 
@@ -534,7 +591,7 @@ function IdStep(p: {
           Retour
         </Button>
         <Button className="h-13 flex-1" disabled={!picked || pending} onClick={next}>
-          {pending ? "Préparation…" : "Recevoir mon code SMS"}
+          {pending ? "Préparation…" : "Recevoir mon code de signature"}
         </Button>
       </StickyBar>
     </section>
@@ -543,7 +600,7 @@ function IdStep(p: {
 
 // ---------------------------------------------------------------------------
 
-function OtpStep({ token, info, demoMode }: { token: string; info: { demoCode?: string; phoneMasked: string }; demoMode: boolean }) {
+function OtpStep({ token, info, demoMode }: { token: string; info: OtpInfo; demoMode: boolean }) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [demo, setDemo] = useState(info.demoCode);
@@ -577,14 +634,14 @@ function OtpStep({ token, info, demoMode }: { token: string; info: { demoCode?: 
       <h1 id="step-title" tabIndex={-1} className="text-2xl font-bold outline-none">
         Code de confirmation
       </h1>
-      <p className="text-[15px] leading-relaxed text-ink-2">Nous avons envoyé un code à 6 chiffres au {info.phoneMasked}.</p>
+      <p className="text-[15px] leading-relaxed text-ink-2">Nous avons envoyé un code à 6 chiffres {info.sentTo}.</p>
       {demoMode && demo && (
         <p className="rounded-xl bg-brand-soft px-4 py-3 text-[14px]">
           Mode démonstration : votre code est <strong className="tabular-nums tracking-widest">{demo}</strong>
         </p>
       )}
       <label className="flex flex-col gap-2 text-[15px] font-semibold">
-        Code reçu par SMS
+        Code de signature
         <input
           className="h-14 rounded-xl border border-line-strong bg-white text-center text-2xl font-semibold tracking-[0.5em] tabular-nums"
           inputMode="numeric"

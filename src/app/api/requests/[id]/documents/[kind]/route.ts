@@ -35,9 +35,10 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/requests/[id]/d
       templateVersion: d.version.version,
       requestId: d.request.id,
       signedSha256: signed?.sha256 ?? null,
+      fullDocumentOpenedAt: d.events.find((e) => e.type === "patient.full_document_opened")?.at ?? null,
       sections: d.version.sections.map((s) => {
         const e = d.reads.find((x) => x.sectionId === s.id);
-        return { title: s.title, visibleMs: e?.visibleMs ?? 0, acknowledgedAt: e?.acknowledgedAt ?? null };
+        return { title: s.title, visibleMs: e?.visibleMs ?? 0, acknowledgedAt: e?.acknowledgedAt ?? null, fullTextOpenedAt: e?.fullTextOpenedAt ?? null };
       }),
       flags: d.flags.map((f) => ({ message: f.message, detail: f.detail, reviewedAt: f.reviewedAt })),
       events: d.events.map((e) => ({

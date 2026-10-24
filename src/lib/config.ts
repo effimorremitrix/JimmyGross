@@ -13,6 +13,13 @@ const schema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
+  EMAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
+  SMTP_URL: z.string().optional(),
+  EMAIL_FROM: z.string().default("Consentza <no-reply@consentza.fr>"),
+  /** Bearer secret for the scheduled sender (/api/cron/send-due). */
+  CRON_SECRET: z.string().optional(),
+  /** Yousign needs an e-mail per signer; used only when the patient has none (delivery stays SMS). */
+  YOUSIGN_FALLBACK_EMAIL_DOMAIN: z.string().optional(),
   /** Shows the mock OTP on screen. Never enable with real patients. */
   DEMO_MODE: z
     .enum(["true", "false"])
@@ -38,6 +45,9 @@ export function config(): Config {
   }
   if (c.SMS_PROVIDER === "twilio" && !(c.TWILIO_ACCOUNT_SID && c.TWILIO_AUTH_TOKEN && c.TWILIO_FROM)) {
     throw new Error("SMS_PROVIDER=twilio requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM");
+  }
+  if (c.EMAIL_PROVIDER === "smtp" && !c.SMTP_URL) {
+    throw new Error("EMAIL_PROVIDER=smtp requires SMTP_URL");
   }
   cached = c;
   return c;

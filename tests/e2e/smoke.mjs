@@ -49,6 +49,14 @@ async function patientFlow(browser, link, dob, { aes = false, yesAnticoag = fals
 
   await page.getByRole("heading", { name: "Fiche d'information" }).waitFor();
   await scan(page, "patient info sheet");
+  ok("summary shown with full text one tap away", (await page.getByText("Lire le texte complet de cette partie").count()) >= 9);
+  await page.getByText("Lire le texte complet de cette partie").first().click();
+  await page.getByText(/Une infiltration peut être proposée pour une douleur articulaire/).waitFor();
+  ok("full original text expands", true);
+  await scan(page, "patient info sheet (full text open)");
+  const docHref = await page.getByRole("link", { name: /Lire le document complet/ }).getAttribute("href");
+  const docRes = await page.request.get(new URL(docHref, BASE).toString());
+  ok("full document PDF for patient", docRes.status() === 200 && (await docRes.body()).subarray(0, 4).toString() === "%PDF");
   const ackButtons = page.getByRole("button", { name: "J'ai lu cette partie" });
   const n = await ackButtons.count();
   for (let i = 0; i < n; i++) {
@@ -86,18 +94,18 @@ async function patientFlow(browser, link, dob, { aes = false, yesAnticoag = fals
     await scan(page, "patient id check (mock AES)");
     await page.locator('input[type="file"]').setInputFiles({ name: "cni.png", mimeType: "image/png", buffer: Buffer.from("fake") });
   }
-  await page.getByRole("button", { name: "Recevoir mon code SMS" }).click();
+  await page.getByRole("button", { name: "Recevoir mon code de signature" }).click();
   await page.getByRole("heading", { name: "Code de confirmation" }).waitFor();
   await scan(page, "patient OTP");
   const code = (await page.locator("strong.tabular-nums").textContent())?.trim();
   ok("demo OTP shown", /^\d{6}$/.test(code ?? ""), code);
 
-  await page.getByLabel("Code reçu par SMS").fill("000000" === code ? "111111" : "000000");
+  await page.getByLabel("Code de signature").fill("000000" === code ? "111111" : "000000");
   await page.getByRole("button", { name: "Valider et signer" }).click();
   await page.getByText("Code incorrect").waitFor();
   ok("wrong OTP rejected", true);
 
-  await page.getByLabel("Code reçu par SMS").fill(code);
+  await page.getByLabel("Code de signature").fill(code);
   await page.getByRole("button", { name: "Valider et signer" }).click();
   await page.getByRole("heading", { name: /C'est signé/ }).waitFor({ timeout: 15000 });
   ok(`patient signed (${aes ? "AES" : "SES"})`, true);
@@ -106,7 +114,7 @@ async function patientFlow(browser, link, dob, { aes = false, yesAnticoag = fals
 }
 
 async function staffFlow(browser) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "fr-FR" });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "fr-FR", permissions: ["clipboard-read", "clipboard-write"] });
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
   await scan(page, "login");
@@ -167,15 +175,70 @@ async function staffFlow(browser) {
 
   await page.goto(`${BASE}/cabinet/modeles`);
   await scan(page, "templates");
+  ok("summaries pending approval shown", (await page.getByText("Résumés à valider par le médecin").count()) === 1);
+  await page.getByRole("button", { name: "J'ai relu et je valide les résumés" }).click();
+  await page.getByText(/Résumés validés le/).waitFor();
+  ok("doctor approves summaries", true);
+
+  // ---- Weekly agenda import ----
+  await page.goto(`${BASE}/cabinet/import`);
+  await scan(page, "import (empty)");
+  await page.getByLabel("Fichier de l'agenda (CSV)").setInputFiles("samples/agenda-semaine-demo.csv");
+  await page.getByRole("heading", { name: /Aperçu/ }).waitFor();
+  await scan(page, "import preview");
+  const btn = page.getByRole("button", { name: /Créer \d+ demande/ });
+  ok("import preview: 3 ready", (await btn.textContent()).includes("Créer 3 demande"), await btn.textContent());
+  ok("landline without e-mail flagged", (await page.getByText("numéro fixe sans e-mail").count()) === 1);
+  ok("duplicate line detected", (await page.getByText("demande déjà existante").count()) === 1);
+  ok("consultation motif skipped", (await page.getByText("« Première consultation »").count()) === 1);
+  const mapper = page.locator("li").filter({ hasText: "« Infiltration genou »" });
+  await mapper.getByLabel("Geste prérempli").selectOption("Infiltration de corticoïde");
+  await mapper.getByRole("button", { name: "Demander un consentement pour ce motif" }).click();
+  await page.getByRole("button", { name: "Créer 4 demande(s)" }).waitFor();
+  ok("mapping a motif adds its rows", true);
+  await page.getByRole("button", { name: "Créer 4 demande(s)" }).click();
+  await page.getByRole("heading", { name: "4 demande(s) créée(s)" }).waitFor();
+  ok("import created 4 scheduled requests", (await page.getByText("4 lien(s) programmé(s)").count()) === 1);
+
+  const cronBad = await page.request.post(`${BASE}/api/cron/send-due`, { headers: { authorization: "Bearer nope" } });
+  ok("scheduler rejects bad secret", cronBad.status() === 401);
+  const cronOk = await page.request.post(`${BASE}/api/cron/send-due`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET ?? "dev-cron-secret"}` } });
+  ok("scheduler runs", cronOk.status() === 200, JSON.stringify(await cronOk.json()));
+
+  // Patient imported without birth date: access by code.
+  const csvDay = (await import("node:fs")).readFileSync("samples/agenda-semaine-demo.csv", "utf8").split(/\r?\n/)[2].split(";")[0];
+  const ymd = csvDay.split("/").reverse().join("-");
+  await page.goto(`${BASE}/cabinet?jour=${ymd}`);
+  await scan(page, "dashboard with scheduled sends");
+  ok("scheduled chip on dashboard", (await page.getByText("Programmé").count()) >= 2);
+  const hugoRow = page.locator("tr").filter({ hasText: "Hugo Blanc" });
+  await hugoRow.getByRole("button", { name: "Copier un lien" }).click();
+  await hugoRow.getByText("Lien copié").waitFor();
+  const hugoLink = await page.evaluate(() => navigator.clipboard.readText());
   await ctx.close();
-  return link;
+  return { fresh: link, hugoLink };
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH });
 try {
   await patientFlow(browser, process.env.PATIENT_LINK, "1978-03-14", { yesAnticoag: true });
   if (process.env.AES_LINK) await patientFlow(browser, process.env.AES_LINK, "1983-08-08", { aes: true });
-  const fresh = await staffFlow(browser);
+  const { fresh, hugoLink } = await staffFlow(browser);
+
+  {
+    const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const p = await c.newPage();
+    await p.goto(hugoLink);
+    await p.getByRole("button", { name: "Recevoir mon code" }).click();
+    await p.getByText(/Code envoyé à l'adresse/).waitFor();
+    await scan(p, "patient access by code");
+    const code = (await p.locator("strong.tabular-nums").textContent()).trim();
+    await p.getByLabel("Code de vérification").fill(code);
+    await p.getByRole("button", { name: "Continuer" }).click();
+    await p.getByRole("button", { name: "Commencer" }).waitFor();
+    ok("no birth date: access by e-mail code works", true);
+    await c.close();
+  }
 
   // Lockout after 5 wrong birth dates on the freshly created link.
   const ctx = await browser.newContext();

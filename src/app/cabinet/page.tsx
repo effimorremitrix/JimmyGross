@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonClass, Card, Chip, Icon } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { frDay, frTime, isYmd, parisYmd, shiftYmd } from "@/lib/dates";
+import { frDateTime, frDay, frTime, isYmd, parisYmd, shiftYmd } from "@/lib/dates";
 import { fmtDuration } from "@/lib/pdf";
 import { STATUS_LABEL, statusTone } from "@/domain/status";
 import { dayView } from "@/server/dashboard";
@@ -39,8 +39,8 @@ export default async function DayPage({ searchParams }: PageProps<"/cabinet">) {
             <span className="sr-only">Jour suivant</span>
             <Icon name="back" className="rotate-180" />
           </Link>
-          <Link className={buttonClass("primary")} href="/cabinet/nouveau">
-            Nouvelle demande
+          <Link className={buttonClass("primary")} href="/cabinet/import">
+            Importer l&apos;agenda
           </Link>
         </nav>
       </div>
@@ -77,10 +77,12 @@ export default async function DayPage({ searchParams }: PageProps<"/cabinet">) {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <a className={buttonClass("secondary")} href={`tel:${a.row.patient.phone.replace(/\s/g, "")}`}>
-                    <Icon name="phone" />
-                    Appeler
-                  </a>
+                  {a.row.patient.phone && (
+                    <a className={buttonClass("secondary")} href={`tel:${a.row.patient.phone.replace(/\s/g, "")}`}>
+                      <Icon name="phone" />
+                      Appeler
+                    </a>
+                  )}
                   <form action={reviewFlag.bind(null, a.id)}>
                     <button type="submit" className={buttonClass(a.reviewedAt ? "secondary" : "primary")} aria-pressed={!!a.reviewedAt}>
                       {a.reviewedAt ? "Vérifié" : "Marquer vérifié"}
@@ -136,7 +138,18 @@ export default async function DayPage({ searchParams }: PageProps<"/cabinet">) {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5">{r ? <Chip tone={statusTone(r.status)}>{STATUS_LABEL[r.status]}</Chip> : "-"}</td>
+                      <td className="px-5 py-3.5">
+                        {!r ? (
+                          "-"
+                        ) : r.status === "created" && r.scheduledSendAt ? (
+                          <>
+                            <Chip tone="idle">Programmé</Chip>
+                            <p className="mt-1 text-[12px] text-muted">envoi {frDateTime(r.scheduledSendAt)}</p>
+                          </>
+                        ) : (
+                          <Chip tone={statusTone(r.status)}>{STATUS_LABEL[r.status]}</Chip>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5">
                         {!r?.answers ? (
                           <Chip tone="idle">Non rempli</Chip>
@@ -148,13 +161,13 @@ export default async function DayPage({ searchParams }: PageProps<"/cabinet">) {
                       </td>
                       <td className="px-5 py-3.5 text-[13px] text-muted">
                         {row.readCount
-                          ? `Lu ${fmtDuration(row.readMs)} · ${row.readCount} partie(s)`
+                          ? `Lu ${fmtDuration(row.readMs)} · ${row.readCount} partie(s)${row.fullTextCount ? ` · texte intégral : ${row.fullTextCount}` : ""}`
                           : r?.lastSentAt
                             ? "Envoyé, pas encore lu"
                             : "-"}
                       </td>
                       <td className="px-5 py-2 text-right">
-                        {r && <RowActions requestId={r.id} signed={r.status === "signed"} closed={r.status === "cancelled" || r.status === "expired"} />}
+                        {r && <RowActions requestId={r.id} signed={r.status === "signed"} closed={r.status === "cancelled" || r.status === "expired"} neverSent={r.sendCount === 0} />}
                       </td>
                     </tr>
                   );

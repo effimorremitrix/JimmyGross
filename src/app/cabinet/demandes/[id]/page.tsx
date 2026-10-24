@@ -30,6 +30,8 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
   const { request: r, patient, appointment, version, flags, reads, events, docs } = d;
   const questions = applicableQuestions(version.questions, r.plannedAct);
   const totalMs = reads.reduce((s, e) => s + e.visibleMs, 0);
+  const fullTextCount = reads.filter((e) => e.fullTextOpenedAt).length;
+  const fullDocAt = events.find((e) => e.type === "patient.full_document_opened")?.at ?? null;
   const kinds = [...new Set(docs.map((x) => x.kind))];
 
   return (
@@ -45,7 +47,7 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
             {patient.firstName} {patient.lastName}
           </h1>
           <p className="text-[15px] text-muted">
-            {appointment.visitReasonLabel} · {frDateTime(appointment.scheduledAt)} · né(e) le {patient.birthDate.split("-").reverse().join("/")}
+            {appointment.visitReasonLabel} · {frDateTime(appointment.scheduledAt)}{patient.birthDate ? ` · né(e) le ${patient.birthDate.split("-").reverse().join("/")}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -113,18 +115,22 @@ export default async function RequestPage({ params }: PageProps<"/cabinet/demand
           <Card className="p-5">
             <h2 className="text-[17px] font-semibold">Preuve d&apos;information</h2>
             <p className="mt-1 text-[14px] text-muted">
-              Modèle « {version.title} », version {version.version}. Temps de lecture total : {fmtDuration(totalMs)}.
+              Modèle « {version.title} », version {version.version}. Temps de lecture total : {fmtDuration(totalMs)}. Texte
+              intégral ouvert pour {fullTextCount} partie(s) sur {version.sections.length}
+              {fullDocAt ? `, document complet (PDF) ouvert le ${frDateTime(fullDocAt)}` : ""}.
             </p>
             <ul className="mt-3 flex flex-col gap-1.5 text-[14px]">
               {version.sections.map((s) => {
-                const e = reads.find((x) => x.sectionId === s.id);
+                const e = reads.find((x) => x.sectionId === s.id && x.acknowledgedAt);
+                const full = reads.find((x) => x.sectionId === s.id)?.fullTextOpenedAt;
                 return (
                   <li key={s.id} className="flex items-center gap-3">
                     <span className={e ? "text-ok" : "text-muted"}>
                       <Icon name={e ? "check" : "lock"} className="h-4 w-4" />
                     </span>
                     <span className="flex-1">{s.title}</span>
-                    <span className="tabular-nums text-muted">{e ? `${fmtDuration(e.visibleMs)} · ${frDateTime(e.acknowledgedAt)}` : "non lue"}</span>
+                    {full && <Chip tone="info">Texte intégral</Chip>}
+                    <span className="tabular-nums text-muted">{e?.acknowledgedAt ? `${fmtDuration(e.visibleMs)} · ${frDateTime(e.acknowledgedAt)}` : "non lue"}</span>
                   </li>
                 );
               })}

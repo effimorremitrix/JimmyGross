@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { buttonClass } from "@/components/ui";
 import { newLink, remind } from "./actions";
 
-export function RowActions({ requestId, signed, closed }: { requestId: string; signed: boolean; closed: boolean }) {
+export function RowActions({ requestId, signed, closed, neverSent = false }: { requestId: string; signed: boolean; closed: boolean; neverSent?: boolean }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -45,11 +45,11 @@ export function RowActions({ requestId, signed, closed }: { requestId: string; s
         onClick={() =>
           start(async () => {
             const res = await remind(requestId);
-            setMsg(res.ok ? "Relancé par SMS" : (res.error ?? "Erreur"));
+            setMsg(res.ok ? (neverSent ? "Envoyé" : "Relancé") : (res.error ?? "Erreur"));
           })
         }
       >
-        Relancer
+        {neverSent ? "Envoyer maintenant" : "Relancer"}
       </button>
     </div>
   );

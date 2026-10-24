@@ -26,8 +26,8 @@ export function NewRequestForm({ reasons, defaultDate }: { reasons: Reason[]; de
           <h2 className="text-[19px] font-semibold text-ink">Demande créée</h2>
         </div>
         <p className="mt-3 text-[15px] text-ink-2">
-          {state.sms
-            ? "Le SMS est parti. Vous pouvez aussi coller ce lien dans le message de rendez-vous Doctolib :"
+          {state.sentTo
+            ? `Lien envoyé (${state.sentTo}). Vous pouvez aussi le coller dans le message de rendez-vous Doctolib :`
             : "Collez ce lien dans le message de rendez-vous Doctolib du patient :"}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -72,13 +72,13 @@ export function NewRequestForm({ reasons, defaultDate }: { reasons: Reason[]; de
           <Field label="Nom" error={err("lastName")} className={label}>
             <input name="lastName" defaultValue={val("lastName")} autoComplete="off" required aria-invalid={!!err("lastName")} className={input} />
           </Field>
-          <Field label="Date de naissance" error={err("birthDate")} className={label} hint="Sert à vérifier l'identité à l'ouverture du lien.">
-            <input name="birthDate" defaultValue={val("birthDate")} type="date" required aria-invalid={!!err("birthDate")} className={input} />
+          <Field label="Date de naissance (conseillée)" error={err("birthDate")} className={label} hint="Vérifie l'identité à l'ouverture du lien. Sans elle, le patient reçoit un code.">
+            <input name="birthDate" defaultValue={val("birthDate")} type="date" aria-invalid={!!err("birthDate")} className={input} />
           </Field>
           <Field label="Téléphone mobile" error={err("phone")} className={label}>
-            <input name="phone" defaultValue={val("phone")} type="tel" inputMode="tel" placeholder="06 12 34 56 78" required aria-invalid={!!err("phone")} className={input} />
+            <input name="phone" defaultValue={val("phone")} type="tel" inputMode="tel" placeholder="06 12 34 56 78" aria-invalid={!!err("phone")} className={input} />
           </Field>
-          <Field label="E-mail (facultatif, requis pour la signature avancée)" error={err("email")} className={`${label} sm:col-span-2`}>
+          <Field label="E-mail" error={err("email")} className={`${label} sm:col-span-2`}>
             <input name="email" defaultValue={val("email")} type="email" aria-invalid={!!err("email")} className={input} />
           </Field>
         </div>
@@ -117,14 +117,17 @@ export function NewRequestForm({ reasons, defaultDate }: { reasons: Reason[]; de
         <fieldset>
           <legend className="text-[16px] font-semibold">Envoi</legend>
           <div className="mt-3 flex flex-col gap-2 text-[15px]">
-            <label className="flex min-h-11 items-center gap-3">
-              <input type="radio" name="channel" value="sms" defaultChecked className="h-5 w-5 accent-brand" />
-              Envoyer le lien par SMS maintenant
-            </label>
-            <label className="flex min-h-11 items-center gap-3">
-              <input type="radio" name="channel" value="manual_link" className="h-5 w-5 accent-brand" />
-              Je colle le lien moi-même dans Doctolib
-            </label>
+            {[
+              ["sms", "Envoyer le lien par SMS maintenant"],
+              ["email", "Envoyer le lien par e-mail maintenant"],
+              ["sms_email", "SMS et e-mail"],
+              ["manual_link", "Je colle le lien moi-même dans Doctolib"],
+            ].map(([value, text]) => (
+              <label key={value} className="flex min-h-11 items-center gap-3">
+                <input type="radio" name="channel" value={value} defaultChecked={(val("channel") ?? "sms") === value} className="h-5 w-5 accent-brand" />
+                {text}
+              </label>
+            ))}
           </div>
         </fieldset>
       </Card>

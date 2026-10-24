@@ -30,13 +30,15 @@ export async function dayView(practiceId: string, ymd: string) {
       .filter((r) => r.appointmentId === a.id && r.status !== "cancelled")
       .sort((x, y) => +y.createdAt - +x.createdAt)[0];
     const rFlags = request ? flags.filter((f) => f.requestId === request.id) : [];
-    const rReads = request ? reads.filter((e) => e.requestId === request.id) : [];
+    const rReads = request ? reads.filter((e) => e.requestId === request.id && e.acknowledgedAt) : [];
+    const fullTextCount = request ? reads.filter((e) => e.requestId === request.id && e.fullTextOpenedAt).length : 0;
     return {
       appointment: a,
       patient,
       request: request ?? null,
       flags: rFlags,
       readCount: rReads.length,
+      fullTextCount,
       readMs: rReads.reduce((s, e) => s + e.visibleMs, 0),
     };
   });

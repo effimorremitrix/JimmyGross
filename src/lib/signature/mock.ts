@@ -1,14 +1,12 @@
 import "server-only";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { config } from "@/lib/config";
-import { newOtp, safeEqualHex, sha256 } from "@/lib/crypto";
+import { maskEmail } from "@/lib/email";
+import { checkOtp, issueOtp } from "@/lib/otp";
 import { sealPdfMock } from "@/lib/pdf";
-import { maskPhone, smsSender } from "@/lib/sms";
+import { maskPhone } from "@/lib/sms";
 import type { ProviderRef, SignResult, SignatureProvider, SignedOutput, StartInput, StartResult } from "./types";
-
-const OTP_TTL_MS = 10 * 60 * 1000;
-const OTP_MAX_ATTEMPTS = 5;
 
 /**
  * Development and demo provider. Mirrors Yousign's flow (OTP limits included)
@@ -27,36 +25,12 @@ export class MockProvider implements SignatureProvider {
   }
 
   async sendOtp(ref: ProviderRef) {
-    const code = newOtp();
-    await db
-      .update(schema.otpChallenges)
-      .set({ usedAt: new Date() })
-      .where(and(eq(schema.otpChallenges.requestId, ref.requestId), isNull(schema.otpChallenges.usedAt)));
-    await db.insert(schema.otpChallenges).values({
-      requestId: ref.requestId,
-      codeHash: sha256(code),
-      expiresAt: new Date(Date.now() + OTP_TTL_MS),
-    });
-    await smsSender().send(ref.phone, `Consentza : votre code de signature est ${code}. Il expire dans 10 minutes.`);
-    return config().DEMO_MODE ? { demoCode: code } : {};
+    const { code, sentTo } = await issueOtp(ref.requestId, "sign", ref);
+    return { sentTo, ...(config().DEMO_MODE ? { demoCode: code } : {}) };
   }
 
   async signWithOtp(ref: ProviderRef, p: { otp: string }): Promise<SignResult> {
-    const ch = await db.query.otpChallenges.findFirst({
-      where: and(eq(schema.otpChallenges.requestId, ref.requestId), isNull(schema.otpChallenges.usedAt)),
-      orderBy: desc(schema.otpChallenges.expiresAt),
-    });
-    if (!ch || ch.expiresAt < new Date()) return { ok: false, reason: "expired" };
-    if (ch.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "too_many_attempts" };
-    if (!/^\d{6}$/.test(p.otp) || !safeEqualHex(sha256(p.otp), ch.codeHash)) {
-      await db
-        .update(schema.otpChallenges)
-        .set({ attempts: ch.attempts + 1 })
-        .where(eq(schema.otpChallenges.id, ch.id));
-      return { ok: false, reason: ch.attempts + 1 >= OTP_MAX_ATTEMPTS ? "too_many_attempts" : "bad_otp" };
-    }
-    await db.update(schema.otpChallenges).set({ usedAt: new Date() }).where(eq(schema.otpChallenges.id, ch.id));
-    return { ok: true };
+    return checkOtp(ref.requestId, "sign", p.otp);
   }
 
   async isDone(ref: ProviderRef) {
@@ -72,17 +46,18 @@ export class MockProvider implements SignatureProvider {
     });
     if (!r || !unsigned) throw new Error("Unsigned document not found");
     const patient = await db.query.patients.findFirst({ where: eq(schema.patients.id, r.patientId) });
+    const channel = ref.phone ? "SMS" : "e-mail";
     const signedPdf = await sealPdfMock(unsigned.bytes, {
       unsignedSha256: unsigned.sha256,
       signerName: patient ? `${patient.firstName} ${patient.lastName.toUpperCase()}` : "Patient",
-      signerPhoneMasked: maskPhone(ref.phone),
+      signerPhoneMasked: ref.phone ? maskPhone(ref.phone) : ref.email ? maskEmail(ref.email) : "-",
       signedAt: r.signedAt ?? new Date(),
       ip: r.signerIp,
       level: r.signatureLevel,
       method:
         r.signatureLevel === "AES"
-          ? "Signature manuscrite tracée + pièce d'identité (simulée) + code SMS à usage unique"
-          : "Signature manuscrite tracée + code SMS à usage unique",
+          ? `Signature manuscrite tracée + pièce d'identité (simulée) + code ${channel} à usage unique`
+          : `Signature manuscrite tracée + code ${channel} à usage unique`,
       requestId: r.id,
     });
     return { signedPdf };

@@ -35,7 +35,11 @@ export class YousignProvider implements SignatureProvider {
   }
 
   async start(input: StartInput): Promise<StartResult> {
-    if (!input.signer.email) throw new Error("Yousign requires the patient's e-mail address");
+    const aes = input.level === "AES";
+    if (aes && !input.signer.phone) throw new Error("La signature avancée nécessite un numéro de mobile.");
+    const fallback = config().YOUSIGN_FALLBACK_EMAIL_DOMAIN;
+    const email = input.signer.email ?? (fallback ? `patient-${input.requestId}@${fallback}` : null);
+    if (!email) throw new Error("Yousign requires an e-mail per signer: set YOUSIGN_FALLBACK_EMAIL_DOMAIN for SMS-only patients");
     const sr = await this.call<{ id: string }>(
       "/signature_requests",
       this.json({
@@ -54,19 +58,18 @@ export class YousignProvider implements SignatureProvider {
       body: form,
     });
 
-    const aes = input.level === "AES";
     const signer = await this.call<{ id: string }>(
       `/signature_requests/${sr.id}/signers`,
       this.json({
         info: {
           first_name: input.signer.firstName,
           last_name: input.signer.lastName,
-          email: input.signer.email,
-          phone_number: toE164(input.signer.phone),
+          email,
+          ...(input.signer.phone ? { phone_number: toE164(input.signer.phone) } : {}),
           locale: "fr",
         },
         signature_level: aes ? "advanced_electronic_signature" : "electronic_signature",
-        signature_authentication_mode: "otp_sms",
+        signature_authentication_mode: input.signer.phone ? "otp_sms" : "otp_email",
         ...(aes ? { redirect_urls: { success: input.returnUrl, error: input.returnUrl } } : {}),
         fields: [
           {
@@ -101,7 +104,8 @@ export class YousignProvider implements SignatureProvider {
     await this.call(`/signature_requests/${ref.providerRequestId}/signers/${ref.signerId}/send_otp`, {
       method: "POST",
     });
-    return {};
+    const d = (ref.phone ?? "").replace(/\D/g, "");
+    return { sentTo: ref.phone ? `au ${d.slice(0, 2)} •• •• •• ${d.slice(-2)}` : "à votre adresse e-mail" };
   }
 
   async signWithOtp(

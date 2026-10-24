@@ -5,7 +5,7 @@ export interface StartInput {
   requestId: string;
   level: SignatureLevel;
   title: string;
-  signer: { firstName: string; lastName: string; email: string | null; phone: string };
+  signer: { firstName: string; lastName: string; email: string | null; phone: string | null };
   pdf: Uint8Array;
   box: SignatureBox;
   /** Where the provider sends the patient back after hosted (AES) signing. */
@@ -23,7 +23,8 @@ export interface ProviderRef {
   providerRequestId: string;
   signerId: string;
   documentId: string;
-  phone: string;
+  phone: string | null;
+  email: string | null;
 }
 
 export type SignResult = { ok: true } | { ok: false; reason: "bad_otp" | "expired" | "too_many_attempts" };
@@ -40,8 +41,8 @@ export interface SignedOutput {
 export interface SignatureProvider {
   readonly name: "mock" | "yousign";
   start(input: StartInput): Promise<StartResult>;
-  /** Returns the code on screen only in DEMO_MODE with the mock provider. */
-  sendOtp(ref: ProviderRef): Promise<{ demoCode?: string }>;
+  /** `demoCode` only in DEMO_MODE with the mock provider; `sentTo` is a masked destination. */
+  sendOtp(ref: ProviderRef): Promise<{ demoCode?: string; sentTo: string }>;
   signWithOtp(
     ref: ProviderRef,
     p: { otp: string; ip: string | null; consentGivenAt: Date; signaturePng: Uint8Array | null; signerName: string; level: SignatureLevel },

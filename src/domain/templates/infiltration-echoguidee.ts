@@ -19,6 +19,7 @@ export const infiltrationTemplate = {
     {
       id: "pourquoi",
       title: "1. Pourquoi ce geste vous est-il proposé ?",
+      summary: ["Le médecin dépose un produit au contact de la zone douloureuse, avec une aiguille guidée en temps réel par échographie.", "L'échographie rend le geste plus précis et limite le risque pour les structures voisines, sans le supprimer totalement."],
       paragraphs: [
         "Une infiltration peut être proposée pour une douleur articulaire, tendineuse, péri-articulaire, kystique, nerveuse ou rachidienne lorsqu'un traitement local paraît indiqué. Le geste consiste à déposer un produit au contact de la zone ciblée, avec une aiguille introduite à travers la peau, sous guidage échographique en temps réel.",
         "L'échographie permet de visualiser la zone à traiter, d'adapter la trajectoire de l'aiguille et de limiter le risque de lésion des structures voisines. Elle ne supprime toutefois pas totalement les risques liés à tout geste médical invasif.",
@@ -27,6 +28,7 @@ export const infiltrationTemplate = {
     {
       id: "produits",
       title: "2. Produits pouvant être utilisés",
+      summary: ["Quatre produits possibles : corticoïde, anesthésique local, acide hyaluronique, ou PRP (préparé à partir de votre propre sang).", "Le choix dépend de votre pathologie, de votre examen, de vos imageries et de la discussion avec le médecin."],
       paragraphs: [
         "Le choix du produit, de la localisation et du nombre éventuel de séances dépend de votre pathologie, de votre examen clinique, de vos imageries, de vos traitements et de la discussion médicale.",
       ],
@@ -46,6 +48,7 @@ export const infiltrationTemplate = {
     {
       id: "benefices",
       title: "3. Bénéfices attendus et limites du traitement",
+      summary: ["Objectif : moins de douleur et une meilleure fonction.", "Le résultat peut être complet, partiel, temporaire ou nul ; il peut aussi être différé.", "Aucun résultat n'est garanti, et la maladie peut continuer à évoluer même si le geste est bien réalisé."],
       paragraphs: [
         "L'objectif est de diminuer la douleur, d'améliorer la fonction et, dans certains cas, de faciliter la rééducation ou la reprise progressive des activités. L'efficacité est variable selon les patients, les pathologies, l'ancienneté des symptômes, l'importance des lésions sur l'imagerie, les antécédents chirurgicaux, le repos relatif et la rééducation associée.",
       ],
@@ -66,6 +69,7 @@ export const infiltrationTemplate = {
     {
       id: "prp",
       title: "4. Information spécifique concernant le PRP",
+      summary: ["Le PRP vient de votre propre sang. Les preuves scientifiques varient selon les indications.", "L'amélioration est progressive, attendue entre 6 et 12 semaines ; une douleur passagère est possible les jours suivants.", "Effets indésirables du PRP : le plus souvent locaux et passagers. Les risques propres à toute injection restent possibles."],
       paragraphs: [
         "Le PRP est un produit autologue : il provient de votre propre sang. Il est utilisé en pratique musculo-squelettique dans certaines tendinopathies, atteintes articulaires ou lésions méniscales sélectionnées. Les données scientifiques sont variables selon les indications : elles peuvent être encourageantes dans certaines situations, limitées ou incertaines dans d'autres.",
         "Le délai d'amélioration est souvent progressif : elle est attendue entre 6 et 12 semaines après la dernière injection proposée. Une douleur inflammatoire transitoire peut survenir dans les jours suivant l'injection.",
@@ -85,6 +89,7 @@ export const infiltrationTemplate = {
     {
       id: "alternatives",
       title: "5. Alternatives possibles",
+      summary: ["Autres options : surveillance, rééducation, médicaments, orthèse, autre produit, avis chirurgical ou second avis.", "Vous pouvez refuser, prendre le temps de réfléchir ou demander un autre avis, sans conséquence sur votre suivi."],
       paragraphs: [
         "Selon les cas, les alternatives peuvent comprendre : absence de geste et surveillance, adaptation des activités, rééducation, traitement antalgique ou anti-inflammatoire si autorisé, orthèse ou semelles, perte de poids si nécessaire, infiltration d'un autre produit, avis chirurgical ou autre avis spécialisé.",
         "Vous pouvez refuser le geste proposé, demander un délai de réflexion ou solliciter un second avis. Le refus du geste ne remet pas en cause votre prise en charge médicale.",
@@ -93,6 +98,7 @@ export const infiltrationTemplate = {
     {
       id: "deroulement",
       title: "6. Déroulement pratique du geste",
+      summary: ["Apportez vos imageries et ordonnances, et signalez allergie, infection, fièvre, grossesse possible, diabète, hypertension ou traitement anticoagulant.", "Le geste se fait sous échographie, avec désinfection et matériel stérile à usage unique, parfois sous anesthésie locale.", "Un pansement est posé ; un repos relatif est recommandé ensuite."],
       paragraphs: [],
       callouts: [
         {
@@ -109,6 +115,7 @@ export const infiltrationTemplate = {
     {
       id: "consignes",
       title: "7. Consignes après infiltration",
+      summary: ["Repos relatif 48 heures, puis reprise progressive des activités et du sport.", "En cas de douleur : glace, repos, paracétamol si autorisé. Évitez les anti-inflammatoires autour d'une injection de PRP.", "Pas de bain, piscine ni jacuzzi pendant 24 heures."],
       paragraphs: [],
       callouts: [
         {
@@ -127,6 +134,7 @@ export const infiltrationTemplate = {
     {
       id: "risques",
       title: "8. Risques et complications possibles",
+      summary: ["Le plus souvent : douleur passagère, petit hématome, malaise ou rougeur du visage après corticoïde.", "Rares mais graves : infection, allergie sévère, atteinte d'un nerf ou d'un vaisseau, saignement important, rupture de tendon.", "Fièvre, douleur qui augmente, rougeur, chaleur ou gonflement : contactez le cabinet au 06 07 96 03 19, votre médecin, ou le 15."],
       paragraphs: [
         "Comme tout geste médical, même réalisé dans des conditions adaptées de compétence, d'asepsie et de guidage échographique, une infiltration comporte des risques. La majorité des effets indésirables, lorsqu'ils surviennent, sont bénins et transitoires. Les complications graves sont rares à exceptionnelles, mais doivent être connues car elles peuvent nécessiter une prise en charge médicale urgente.",
         "Le guidage échographique, l'asepsie rigoureuse et l'utilisation de matériel stérile à usage unique visent à diminuer ces risques, sans pouvoir les supprimer totalement.",
@@ -181,6 +189,7 @@ export const infiltrationTemplate = {
     {
       id: "financier",
       title: "9. Données financières et remboursement",
+      summary: ["Certains gestes ou produits ne sont pas, ou pas entièrement, remboursés ; un devis vous est remis si nécessaire.", "Le paiement ne garantit pas le résultat, et un résultat insuffisant ne donne pas droit à un remboursement."],
       paragraphs: [
         "Certains gestes, produits ou techniques peuvent ne pas être pris en charge par l'Assurance Maladie ou peuvent faire l'objet d'un remboursement incomplet par les complémentaires santé. Un devis ou une information tarifaire vous est remis lorsque cela est nécessaire.",
         "Le paiement d'un geste non remboursé ou partiellement remboursé ne préjuge pas de son résultat clinique. L'absence d'efficacité ou l'évolution naturelle de la pathologie ne constitue pas, en soi, une indication automatique de remboursement du geste réalisé.",
@@ -190,6 +199,7 @@ export const infiltrationTemplate = {
   consent: {
     statement: [
       "Je reconnais avoir reçu une information claire, loyale et adaptée concernant le geste proposé, ses bénéfices attendus, ses limites, ses alternatives et ses risques, notamment le risque d'échec, d'efficacité partielle ou temporaire, de douleur post-geste, de complication directe rare et d'évolution défavorable de ma pathologie indépendamment du traitement réalisé.",
+      "J'ai eu accès au texte intégral de la fiche d'information remise par le médecin ; un résumé m'en a également été présenté.",
       "Je reconnais avoir pu poser mes questions et avoir obtenu les réponses nécessaires. Je comprends qu'aucun résultat précis, aucun délai d'amélioration et aucun pourcentage individuel de réussite ne peuvent m'être garantis.",
       "Je consens à la réalisation du geste suivant, qui sera confirmé par le médecin le jour de l'acte.",
     ],

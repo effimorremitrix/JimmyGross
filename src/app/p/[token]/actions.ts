@@ -1,12 +1,13 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { audit } from "@/lib/audit";
 import { startPatientSession } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { sha256 } from "@/lib/crypto";
+import { checkOtp, issueOtp } from "@/lib/otp";
 import { buildConsentPdf } from "@/lib/pdf";
 import { requestMeta } from "@/lib/request-meta";
 import { providerByName, signatureProvider } from "@/lib/signature";
@@ -14,40 +15,78 @@ import { computeFlags, validateAnswers } from "@/domain/precheck";
 import { atLeast } from "@/domain/status";
 import type { PrecheckAnswers } from "@/domain/types";
 import { finalizeSigned, providerRef, setStatus } from "@/server/consent";
-import { accessState, loadByToken, requirePatient } from "@/server/patient";
+import { accessState, loadByToken, requirePatient, type PatientContext } from "@/server/patient";
 
-const MAX_DOB_ATTEMPTS = 5;
+const MAX_ACCESS_ATTEMPTS = 5;
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
 // ---------- identity gate ----------
 
-export async function verifyBirthDate(token: string, birthDate: string): Promise<Result<{ remaining?: number }>> {
+async function gateContext(token: string): Promise<PatientContext | string> {
   const ctx = await loadByToken(token);
-  if (!ctx) return { ok: false, error: "Ce lien n'est pas valide." };
+  if (!ctx) return "Ce lien n'est pas valide.";
   const state = await accessState(ctx);
-  if (state === "locked") return { ok: false, error: "Accès bloqué. Contactez le cabinet pour recevoir un nouveau lien." };
-  if (state === "expired" || state === "cancelled") return { ok: false, error: "Ce lien n'est plus valide." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, error: "Date de naissance incomplète." };
+  if (state === "locked") return "Accès bloqué. Contactez le cabinet pour recevoir un nouveau lien.";
+  if (state === "expired" || state === "cancelled") return "Ce lien n'est plus valide.";
+  return ctx;
+}
 
+async function failedAttempt(ctx: PatientContext): Promise<string> {
   const r = ctx.request;
-  if (birthDate !== ctx.patient.birthDate) {
-    const attempts = r.failedDobAttempts + 1;
-    const locked = attempts >= MAX_DOB_ATTEMPTS;
-    await db
-      .update(schema.consentRequests)
-      .set({ failedDobAttempts: attempts, lockedAt: locked ? new Date() : null })
-      .where(eq(schema.consentRequests.id, r.id));
-    await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: locked ? "patient.locked" : "patient.identity_failed" });
-    return locked
-      ? { ok: false, error: "Trop d'essais. L'accès est bloqué : contactez le cabinet." }
-      : { ok: false, error: `Date de naissance incorrecte. Il vous reste ${MAX_DOB_ATTEMPTS - attempts} essai(s).` };
-  }
+  const attempts = r.failedDobAttempts + 1;
+  const locked = attempts >= MAX_ACCESS_ATTEMPTS;
+  await db
+    .update(schema.consentRequests)
+    .set({ failedDobAttempts: attempts, lockedAt: locked ? new Date() : null })
+    .where(eq(schema.consentRequests.id, r.id));
+  await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: locked ? "patient.locked" : "patient.identity_failed" });
+  return locked
+    ? "Trop d'essais. L'accès est bloqué : contactez le cabinet."
+    : `Il vous reste ${MAX_ACCESS_ATTEMPTS - attempts} essai(s).`;
+}
 
+async function grantAccess(ctx: PatientContext, method: "birth_date" | "code") {
+  const r = ctx.request;
   await db.update(schema.consentRequests).set({ failedDobAttempts: 0 }).where(eq(schema.consentRequests.id, r.id));
   await startPatientSession(r.id);
   await setStatus(r, "opened");
-  await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: "patient.identity_ok" });
+  await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: "patient.identity_ok", data: { method } });
+}
+
+export async function verifyBirthDate(token: string, birthDate: string): Promise<Result> {
+  const ctx = await gateContext(token);
+  if (typeof ctx === "string") return { ok: false, error: ctx };
+  if (!ctx.patient.birthDate) return { ok: false, error: "Vérification par code requise." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, error: "Date de naissance incomplète." };
+  if (birthDate !== ctx.patient.birthDate) {
+    const msg = await failedAttempt(ctx);
+    return { ok: false, error: msg.startsWith("Trop") ? msg : `Date de naissance incorrecte. ${msg}` };
+  }
+  await grantAccess(ctx, "birth_date");
+  return { ok: true };
+}
+
+/** When no birth date is on file (agenda import), a code to the patient's phone or e-mail proves access. */
+export async function sendAccessCode(token: string): Promise<Result<{ sentTo: string; demoCode?: string }>> {
+  const ctx = await gateContext(token);
+  if (typeof ctx === "string") return { ok: false, error: ctx };
+  if (ctx.patient.birthDate) return { ok: false, error: "Vérification par date de naissance." };
+  const { code, sentTo } = await issueOtp(ctx.request.id, "access", ctx.patient);
+  await audit({ practiceId: ctx.request.practiceId, requestId: ctx.request.id, actor: "system", type: "patient.access_code_sent" });
+  return { ok: true, sentTo, ...(config().DEMO_MODE ? { demoCode: code } : {}) };
+}
+
+export async function verifyAccessCode(token: string, code: string): Promise<Result> {
+  const ctx = await gateContext(token);
+  if (typeof ctx === "string") return { ok: false, error: ctx };
+  const res = await checkOtp(ctx.request.id, "access", code.replace(/\D/g, ""));
+  if (!res.ok) {
+    if (res.reason === "expired") return { ok: false, error: "Ce code a expiré. Demandez un nouveau code." };
+    const msg = await failedAttempt(ctx);
+    return { ok: false, error: msg.startsWith("Trop") ? msg : `Code incorrect. ${msg}` };
+  }
+  await grantAccess(ctx, "code");
   return { ok: true };
 }
 
@@ -57,23 +96,42 @@ export async function markSectionRead(token: string, sectionId: string, visibleM
   const ctx = await requirePatient(token);
   const r = ctx.request;
   if (r.status === "signed") return { ok: false, error: "Document déjà signé." };
-  const section = ctx.version.sections.find((s) => s.id === sectionId);
-  if (!section) return { ok: false, error: "Partie inconnue." };
+  if (!ctx.version.sections.some((s) => s.id === sectionId)) return { ok: false, error: "Partie inconnue." };
   const ms = Math.max(0, Math.min(Math.round(visibleMs), 60 * 60 * 1000));
-
+  const now = new Date();
   await db
     .insert(schema.readingEvents)
-    .values({ requestId: r.id, sectionId, visibleMs: ms, acknowledgedAt: new Date() })
+    .values({ requestId: r.id, sectionId, visibleMs: ms, acknowledgedAt: now })
     .onConflictDoUpdate({
       target: [schema.readingEvents.requestId, schema.readingEvents.sectionId],
-      set: { visibleMs: ms, acknowledgedAt: new Date() },
+      set: { visibleMs: ms, acknowledgedAt: now },
     });
   await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: "patient.section_read", data: { sectionId, visibleMs: ms } });
 
   const read = await db.query.readingEvents.findMany({ where: eq(schema.readingEvents.requestId, r.id) });
-  const allRead = ctx.version.sections.every((s) => read.some((e) => e.sectionId === s.id));
+  const allRead = ctx.version.sections.every((s) => read.some((e) => e.sectionId === s.id && e.acknowledgedAt));
   if (allRead) await setStatus(r, "info_read");
   return { ok: true, allRead };
+}
+
+/** The patient expanded the practitioner's full text for one section. Logged once. */
+export async function markFullTextOpened(token: string, sectionId: string): Promise<Result> {
+  const ctx = await requirePatient(token);
+  const r = ctx.request;
+  if (!ctx.version.sections.some((s) => s.id === sectionId)) return { ok: false, error: "Partie inconnue." };
+  const existing = await db.query.readingEvents.findFirst({
+    where: (t, { and }) => and(eq(t.requestId, r.id), eq(t.sectionId, sectionId)),
+  });
+  if (existing?.fullTextOpenedAt) return { ok: true };
+  await db
+    .insert(schema.readingEvents)
+    .values({ requestId: r.id, sectionId, fullTextOpenedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [schema.readingEvents.requestId, schema.readingEvents.sectionId],
+      set: { fullTextOpenedAt: new Date() },
+    });
+  await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: "patient.full_text_opened", data: { sectionId } });
+  return { ok: true };
 }
 
 // ---------- Pre-Check ----------
@@ -129,7 +187,7 @@ function decodePng(dataUrl: string): Buffer | null {
 }
 
 export type ConsentStart =
-  | { ok: true; mode: "otp"; demoCode?: string; phoneMasked: string }
+  | { ok: true; mode: "otp"; demoCode?: string; sentTo: string }
   | { ok: true; mode: "redirect"; url: string }
   | { ok: false; error: string };
 
@@ -141,6 +199,9 @@ export async function submitConsent(token: string, input: { signaturePng: string
   if (!input.acknowledged) return { ok: false, error: "Merci de cocher la déclaration de consentement." };
   const png = decodePng(input.signaturePng);
   if (!png) return { ok: false, error: "Signature manquante ou illisible. Merci de signer à nouveau." };
+  if (r.signatureLevel === "AES" && !ctx.patient.phone) {
+    return { ok: false, error: `La signature avancée nécessite un numéro de mobile. Contactez le cabinet au ${ctx.practice.phone}.` };
+  }
 
   const ackAt = new Date();
   const { bytes, box } = await buildConsentPdf({
@@ -213,16 +274,16 @@ export async function submitConsent(token: string, input: { signaturePng: string
     return { ok: true, mode: "redirect", url: started.signingUrl };
   }
   const fresh = { ...r, providerRequestId: started.providerRequestId, providerSignerId: started.signerId, providerDocumentId: started.documentId };
-  const sent = await provider.sendOtp(providerRef(fresh, ctx.patient.phone));
+  const sent = await provider.sendOtp(providerRef(fresh, ctx.patient));
   await audit({ practiceId: r.practiceId, requestId: r.id, actor: "provider", type: "signature.otp_sent" });
-  return { ok: true, mode: "otp", demoCode: sent.demoCode, phoneMasked: maskedPhone(ctx.patient.phone) };
+  return { ok: true, mode: "otp", demoCode: sent.demoCode, sentTo: sent.sentTo };
 }
 
 export async function resendOtp(token: string): Promise<Result<{ demoCode?: string }>> {
   const ctx = await requirePatient(token);
   const r = ctx.request;
   if (r.status !== "awaiting_otp") return { ok: false, error: "Aucun code en attente." };
-  const sent = await providerByName(r.providerName).sendOtp(providerRef(r, ctx.patient.phone));
+  const sent = await providerByName(r.providerName).sendOtp(providerRef(r, ctx.patient));
   await audit({ practiceId: r.practiceId, requestId: r.id, actor: "provider", type: "signature.otp_sent", data: { resend: true } });
   return { ok: true, demoCode: sent.demoCode };
 }
@@ -235,7 +296,7 @@ export async function confirmOtp(token: string, otp: string): Promise<Result> {
   const code = otp.replace(/\D/g, "");
   const { ip } = await requestMeta();
   const provider = providerByName(r.providerName);
-  const res = await provider.signWithOtp(providerRef(r, ctx.patient.phone), {
+  const res = await provider.signWithOtp(providerRef(r, ctx.patient), {
     otp: code,
     ip,
     consentGivenAt: r.patientAckAt ?? new Date(),
@@ -246,7 +307,7 @@ export async function confirmOtp(token: string, otp: string): Promise<Result> {
   if (!res.ok) {
     await audit({ practiceId: r.practiceId, requestId: r.id, actor: "patient", type: "signature.otp_failed", data: { reason: res.reason } });
     const msg = {
-      bad_otp: "Code incorrect. Vérifiez le SMS et réessayez.",
+      bad_otp: "Code incorrect. Vérifiez le message reçu et réessayez.",
       expired: "Ce code a expiré. Demandez un nouveau code.",
       too_many_attempts: "Trop d'essais. Demandez un nouveau code.",
     }[res.reason];
@@ -255,13 +316,8 @@ export async function confirmOtp(token: string, otp: string): Promise<Result> {
   await db
     .update(schema.consentRequests)
     .set({ signedAt: new Date(), signerIp: ip, status: "awaiting_provider", updatedAt: new Date() })
-    .where(and(eq(schema.consentRequests.id, r.id)));
+    .where(eq(schema.consentRequests.id, r.id));
   // Yousign may need a few seconds; the webhook or the patient's page will finish it.
   await finalizeSigned(r.id, "patient");
   return { ok: true };
-}
-
-function maskedPhone(phone: string): string {
-  const d = phone.replace(/\D/g, "");
-  return `${d.slice(0, 2)} •• •• •• ${d.slice(-2)}`;
 }

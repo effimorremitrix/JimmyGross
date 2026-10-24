@@ -6,6 +6,7 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -39,6 +40,7 @@ async function main() {
        DELETE FROM precheck_flags WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM reading_events WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM consent_requests WHERE practice_id=$1;
+       DELETE FROM import_batches WHERE practice_id=$1;
        DELETE FROM appointments WHERE practice_id=$1;
        DELETE FROM patients WHERE practice_id=$1;
        DELETE FROM visit_reasons WHERE practice_id=$1;
@@ -221,7 +223,28 @@ async function main() {
     }
   }
 
+  // A demo agenda export for next week, in a Doctolib-like layout.
+  const nextWeek = (d: number, hhmm: string) => {
+    const ymd = shiftYmd(parisYmd(), 6 + d);
+    return [ymd.split("-").reverse().join("/"), hhmm];
+  };
+  const csv = [
+    ["Date du rendez-vous", "Heure", "Nom", "Prénom", "Date de naissance", "Téléphone portable", "Email", "Motif"],
+    [...nextWeek(0, "09:00"), "ROUSSEAU", "Hélène", "12/02/1971", "06 22 33 44 55", "helene@example.fr", "Infiltration PRP"],
+    [...nextWeek(0, "09:30"), "BLANC", "Hugo", "", "", "hugo.blanc@example.fr", "Infiltration corticoïde"],
+    [...nextWeek(0, "10:00"), "GIRARD", "Inès", "03/09/1990", "06 77 88 99 00", "", "Première consultation"],
+    [...nextWeek(1, "11:00"), "MOREL", "Louis", "21/06/1958", "01 45 67 89 10", "", "Infiltration acide hyaluronique"],
+    [...nextWeek(1, "14:00"), "FOURNIER", "Chloé", "30/11/1985", "+33 6 12 12 12 12", "chloe@example.fr", "Infiltration genou"],
+    [...nextWeek(2, "15:30"), "LAMBERT", "Marc", "07/04/1979", "0611223344", "", "Infiltration rachidienne"],
+    [...nextWeek(2, "15:30"), "LAMBERT", "Marc", "07/04/1979", "0611223344", "", "Infiltration rachidienne"],
+  ]
+    .map((r) => r.map((c) => (/[;"]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(";"))
+    .join("\r\n");
+  mkdirSync("samples", { recursive: true });
+  writeFileSync("samples/agenda-semaine-demo.csv", "\uFEFF" + csv);
+
   console.log("\nSeeded the demo practice.");
+  console.log("Demo agenda export (next week): samples/agenda-semaine-demo.csv");
   console.log(`Login: dr.gross@demo.consentza.fr / ${password}  (or secretariat@demo.consentza.fr)`);
   console.log("Patient links to try:");
   for (const l of links) console.log(`  ${l}`);

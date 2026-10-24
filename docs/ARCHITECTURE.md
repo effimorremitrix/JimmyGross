@@ -11,10 +11,11 @@ Practice ─┬─ User (practitioner | assistant | admin)
           ├─ Template ── TemplateVersion (immutable: sections, consent block, questions, signature level)
           ├─ VisitReason (Doctolib "motif" → Template + default act + optional AES override)
           ├─ Patient ── Appointment ── ConsentRequest
-          │                               ├─ ReadingEvent   (section, time on screen, acknowledged at)
+          │                               ├─ ReadingEvent   (section, time on screen, full text opened at, acknowledged at)
           │                               ├─ PrecheckFlag   (question, severity, detail, reviewed by/at)
           │                               ├─ Document       (unsigned, signed, provider audit trail; sha256)
-          │                               └─ OtpChallenge   (mock provider only, hashed)
+          │                               └─ OtpChallenge   (purpose: sign | access; hashed, 10 min, 5 attempts)
+          ├─ ImportBatch (file hash, rows, created, skipped)
           └─ AuditEvent (append-only; actor, type, data, IP, user agent, time)
 ```
 
@@ -68,8 +69,18 @@ scripts/             migrate, seed
 tests/               unit (vitest) and end-to-end (Playwright + axe)
 ```
 
+## Agenda import (v1 Doctolib bridge)
+
+1. The assistant exports the week's agenda (CSV) and drops it on `/cabinet/import`.
+2. `src/domain/agenda.ts` detects columns by French/English synonyms (date, heure, nom, prénom or patient, date de naissance, téléphone, e-mail, motif), parses French dates, times and phones, and reports bad rows instead of failing. UTF-8 or Windows-1252.
+3. `src/server/agenda-import.ts` classifies each row: ready, motif without consent (ignored), past, duplicate (same patient and time already open), or to fix (no reachable contact, landline only, unreadable data). Unknown motifs can be mapped to a template in one click.
+4. Commit re-reads the same file on the server (the preview is never trusted), creates patients/appointments/requests, and sets `scheduled_send_at` = appointment minus `practices.send_lead_hours` (72 h), never in the past.
+5. `POST /api/cron/send-due` (bearer secret) sends what is due: new token, SMS and/or e-mail, status `sent`. Requests already opened from a copied link are skipped.
+
+Patients imported without a birth date pass the identity gate with a one-time code sent to their phone, or e-mail if they have no mobile.
+
 ## Doctolib integration path
 
-- **v1 (now):** manual. The assistant creates the request (or pastes the link into the Doctolib appointment message).
+- **v1 (now):** weekly agenda import above, plus manual requests and links pasted into the Doctolib message.
 - **v2:** Doctolib Partner API (calendars, visit reasons, patients, appointments) once approved. A poller or webhook creates requests automatically `send_lead_hours` before each appointment whose motif maps to a template. `appointments.source` and `external_id` are ready for it.
 - Writing the signed PDF back into the Doctolib patient file is not supported by the Partner API today.

@@ -100,3 +100,15 @@ describe("PDF text", () => {
     expect(pdfSafe("emoji 😀")).not.toMatch(/😀/);
   });
 });
+
+describe("Template summaries", () => {
+  it("every section has a short summary", () => {
+    for (const s of T.sections) {
+      expect(s.summary.length).toBeGreaterThan(0);
+      expect(s.summary.join(" ").length).toBeLessThan(s.paragraphs.join(" ").length + (s.callouts ?? []).flatMap((c) => c.items).join(" ").length);
+    }
+  });
+  it("the consent statement mentions access to the full text", () => {
+    expect(T.consent.statement.some((x) => x.includes("texte intégral"))).toBe(true);
+  });
+});

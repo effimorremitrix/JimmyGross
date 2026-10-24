@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, schema } from "@/db";
@@ -8,23 +8,31 @@ import { audit } from "@/lib/audit";
 import { requireStaff } from "@/lib/auth";
 import { parisToUtc } from "@/lib/dates";
 import { isTerminal } from "@/domain/status";
-import { patientLink, rotateToken, sendLinkSms } from "@/server/consent";
+import { deliveryLabel, patientLink, rotateToken, sendNow } from "@/server/consent";
+import { createConsentRequest, upsertPatient } from "@/server/requests";
 
-const createSchema = z.object({
-  firstName: z.string().trim().min(1, "Prénom requis").max(80),
-  lastName: z.string().trim().min(1, "Nom requis").max(80),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date de naissance invalide"),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^(\+33|0)[1-9](\s?\d{2}){4}$|^\+\d{8,15}$/, "Numéro de téléphone invalide"),
-  email: z.union([z.literal(""), z.string().trim().email("E-mail invalide")]),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date du rendez-vous invalide"),
-  time: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide"),
-  visitReasonId: z.string().uuid("Choisissez un motif"),
-  location: z.string().trim().max(120),
-  channel: z.enum(["sms", "manual_link"]),
-});
+const phoneRe = /^(\+33|0)[1-9](\s?\d{2}){4}$|^\+\d{8,15}$/;
+
+const createSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "Prénom requis").max(80),
+    lastName: z.string().trim().min(1, "Nom requis").max(80),
+    birthDate: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date de naissance invalide")]),
+    phone: z.union([z.literal(""), z.string().trim().regex(phoneRe, "Numéro de téléphone invalide")]),
+    email: z.union([z.literal(""), z.string().trim().email("E-mail invalide")]),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date du rendez-vous invalide"),
+    time: z.string().regex(/^\d{2}:\d{2}$/, "Heure invalide"),
+    visitReasonId: z.string().uuid("Choisissez un motif"),
+    location: z.string().trim().max(120),
+    channel: z.enum(["sms", "email", "sms_email", "manual_link"]),
+  })
+  .superRefine((v, ctx) => {
+    if (v.channel.startsWith("sms") && !v.phone) ctx.addIssue({ code: "custom", path: ["phone"], message: "Mobile requis pour l'envoi par SMS" });
+    if ((v.channel === "email" || v.channel === "sms_email") && !v.email) ctx.addIssue({ code: "custom", path: ["email"], message: "E-mail requis pour l'envoi par e-mail" });
+    if (v.channel === "manual_link" && !v.phone && !v.email && !v.birthDate) {
+      ctx.addIssue({ code: "custom", path: ["birthDate"], message: "Date de naissance, mobile ou e-mail requis pour vérifier l'identité" });
+    }
+  });
 
 export type CreateState = {
   error?: string;
@@ -32,7 +40,7 @@ export type CreateState = {
   values?: Record<string, string>;
   link?: string;
   requestId?: string;
-  sms?: boolean;
+  sentTo?: string;
 };
 
 export async function createRequest(_: CreateState | undefined, form: FormData): Promise<CreateState> {
@@ -49,70 +57,37 @@ export async function createRequest(_: CreateState | undefined, form: FormData):
     where: and(eq(schema.visitReasons.id, v.visitReasonId), eq(schema.visitReasons.practiceId, staff.practiceId)),
   });
   if (!reason) return { error: "Motif inconnu." };
-  const version = await db.query.templateVersions.findFirst({
-    where: eq(schema.templateVersions.templateId, reason.templateId),
-    orderBy: desc(schema.templateVersions.version),
-  });
-  if (!version) return { error: "Aucun modèle publié pour ce motif." };
   const practice = await db.query.practices.findFirst({ where: eq(schema.practices.id, staff.practiceId) });
   if (!practice) return { error: "Cabinet introuvable." };
 
-  const existing = await db.query.patients.findFirst({
-    where: and(
-      eq(schema.patients.practiceId, staff.practiceId),
-      eq(schema.patients.lastName, v.lastName),
-      eq(schema.patients.firstName, v.firstName),
-      eq(schema.patients.birthDate, v.birthDate),
-    ),
+  const patient = await upsertPatient(staff.practiceId, {
+    firstName: v.firstName,
+    lastName: v.lastName,
+    birthDate: v.birthDate || null,
+    phone: v.phone || null,
+    email: v.email || null,
   });
-  const patient =
-    existing ??
-    (
-      await db
-        .insert(schema.patients)
-        .values({ practiceId: staff.practiceId, firstName: v.firstName, lastName: v.lastName, birthDate: v.birthDate, phone: v.phone, email: v.email || null })
-        .returning()
-    )[0];
-  if (existing && (existing.phone !== v.phone || (v.email && existing.email !== v.email))) {
-    await db.update(schema.patients).set({ phone: v.phone, email: v.email || existing.email }).where(eq(schema.patients.id, existing.id));
-  }
-
-  const scheduledAt = parisToUtc(v.date, v.time);
-  const [appointment] = await db
-    .insert(schema.appointments)
-    .values({ practiceId: staff.practiceId, patientId: patient.id, scheduledAt, visitReasonLabel: reason.label })
-    .returning();
-  const [request] = await db
-    .insert(schema.consentRequests)
-    .values({
-      practiceId: staff.practiceId,
-      appointmentId: appointment.id,
-      patientId: patient.id,
-      templateVersionId: version.id,
-      channel: v.channel,
-      signatureLevel: reason.signatureLevelOverride ?? version.signatureLevel,
-      plannedAct: reason.defaultAct,
-      plannedLocation: v.location,
-      tokenHash: `pending-${crypto.randomUUID()}`,
-      tokenExpiresAt: new Date(),
-      createdById: staff.userId,
-    })
-    .returning();
-  await audit({ practiceId: staff.practiceId, requestId: request.id, actor: `user:${staff.userId}`, type: "request.created" });
-
-  const token = await rotateToken(request.id);
-  if (v.channel === "sms") {
-    await sendLinkSms({
-      request,
-      token,
-      phone: v.phone,
-      practitionerName: practice.practitionerName,
-      appointmentAt: scheduledAt,
+  try {
+    const { request, token } = await createConsentRequest({
+      practice,
       actor: `user:${staff.userId}`,
+      userId: staff.userId,
+      patient,
+      scheduledAt: parisToUtc(v.date, v.time),
+      reason,
+      location: v.location,
+      channel: v.channel,
+      sendMode: v.channel === "manual_link" ? "none" : "now",
     });
+    revalidatePath("/cabinet");
+    return {
+      link: patientLink(token),
+      requestId: request.id,
+      sentTo: v.channel === "manual_link" ? undefined : deliveryLabel(v.channel, patient),
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erreur inattendue." };
   }
-  revalidatePath("/cabinet");
-  return { link: patientLink(token), requestId: request.id, sms: v.channel === "sms" };
 }
 
 async function ownedRequest(practiceId: string, id: string) {
@@ -121,19 +96,22 @@ async function ownedRequest(practiceId: string, id: string) {
   });
 }
 
-/** New link + SMS reminder. The previous link stops working. */
+/** New link + reminder on the request's channel (SMS when manual). The previous link stops working. */
 export async function remind(requestId: string): Promise<{ ok: boolean; error?: string }> {
   const staff = await requireStaff();
   const r = await ownedRequest(staff.practiceId, requestId);
   if (!r || isTerminal(r.status)) return { ok: false, error: "Relance impossible." };
-  const [patient, appt, practice] = await Promise.all([
-    db.query.patients.findFirst({ where: eq(schema.patients.id, r.patientId) }),
-    db.query.appointments.findFirst({ where: eq(schema.appointments.id, r.appointmentId) }),
-    db.query.practices.findFirst({ where: eq(schema.practices.id, r.practiceId) }),
-  ]);
-  if (!patient || !appt || !practice) return { ok: false, error: "Données manquantes." };
-  const token = await rotateToken(r.id);
-  await sendLinkSms({ request: r, token, phone: patient.phone, practitionerName: practice.practitionerName, appointmentAt: appt.scheduledAt, actor: `user:${staff.userId}` });
+  if (r.channel === "manual_link") {
+    const patient = await db.query.patients.findFirst({ where: eq(schema.patients.id, r.patientId) });
+    const channel = patient?.phone ? "sms" : patient?.email ? "email" : null;
+    if (!channel) return { ok: false, error: "Ni mobile ni e-mail : copiez un lien." };
+    await db.update(schema.consentRequests).set({ channel }).where(eq(schema.consentRequests.id, r.id));
+  }
+  try {
+    await sendNow(r.id, `user:${staff.userId}`);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Envoi impossible." };
+  }
   revalidatePath("/cabinet");
   return { ok: true };
 }
@@ -211,4 +189,20 @@ export async function reviewAllFlags(requestId: string): Promise<void> {
   await db.update(schema.precheckFlags).set({ reviewedAt: new Date(), reviewedById: staff.userId }).where(inArray(schema.precheckFlags.id, ids));
   await audit({ practiceId: r.practiceId, requestId: r.id, actor: `user:${staff.userId}`, type: "flag.reviewed", data: { count: ids.length } });
   revalidatePath("/cabinet");
+}
+
+/** The practitioner approves the patient-facing summaries of a template version. */
+export async function approveSummaries(versionId: string): Promise<void> {
+  const staff = await requireStaff();
+  if (staff.role !== "practitioner") return;
+  const v = await db.query.templateVersions.findFirst({ where: eq(schema.templateVersions.id, versionId) });
+  if (!v) return;
+  const t = await db.query.templates.findFirst({ where: and(eq(schema.templates.id, v.templateId), eq(schema.templates.practiceId, staff.practiceId)) });
+  if (!t) return;
+  await db
+    .update(schema.templateVersions)
+    .set({ summariesApprovedAt: new Date(), summariesApprovedById: staff.userId })
+    .where(eq(schema.templateVersions.id, v.id));
+  await audit({ practiceId: staff.practiceId, actor: `user:${staff.userId}`, type: "template.summaries_approved", data: { versionId: v.id, version: v.version } });
+  revalidatePath("/cabinet/modeles");
 }

@@ -15,7 +15,7 @@ export default async function CabinetLayout({ children }: LayoutProps<"/cabinet"
     <div className="min-h-dvh bg-canvas">
       {(c.SIGNATURE_PROVIDER === "mock" || c.DEMO_MODE) && (
         <p className="bg-warn-soft px-4 py-2 text-center text-[13px] font-medium text-warn">
-          Environnement de démonstration : signatures simulées, SMS non envoyés. Aucune donnée réelle de patient.
+          Environnement de démonstration : signatures simulées, SMS et e-mails non envoyés. Aucune donnée réelle de patient.
         </p>
       )}
       <header className="border-b border-line bg-white">
@@ -28,6 +28,7 @@ export default async function CabinetLayout({ children }: LayoutProps<"/cabinet"
           </div>
           <nav aria-label="Navigation principale" className="flex flex-wrap items-center gap-1">
             <NavLink href="/cabinet">Agenda</NavLink>
+            <NavLink href="/cabinet/import">Importer l&apos;agenda</NavLink>
             <NavLink href="/cabinet/nouveau">Nouvelle demande</NavLink>
             <NavLink href="/cabinet/modeles">Modèles</NavLink>
             <form action={logout} className="ml-2 flex items-center gap-2 border-l border-line pl-3">

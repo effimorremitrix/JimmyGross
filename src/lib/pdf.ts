@@ -109,7 +109,7 @@ export interface ConsentPdfInput {
   sections: InfoSection[];
   consent: ConsentBlock;
   questions: Question[];
-  patient: { firstName: string; lastName: string; birthDate: string; phone: string };
+  patient: { firstName: string; lastName: string; birthDate: string | null; phone: string | null };
   plannedAct: string;
   plannedLocation: string;
   appointmentAt: Date;
@@ -136,7 +136,8 @@ export function frDate(d: Date): string {
   }).format(d);
 }
 
-export function frBirthDate(iso: string): string {
+export function frBirthDate(iso: string | null): string {
+  if (!iso) return "non renseignée";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -145,7 +146,10 @@ export function frBirthDate(iso: string): string {
  * Builds the full consent document: information sheet, consent statement,
  * Pre-Check answers, and the patient's drawn signature.
  */
-export async function buildConsentPdf(input: ConsentPdfInput): Promise<{ bytes: Uint8Array; box: SignatureBox }> {
+export async function buildConsentPdf(
+  input: ConsentPdfInput,
+  opts: { infoOnly?: boolean } = {},
+): Promise<{ bytes: Uint8Array; box: SignatureBox }> {
   const doc = await PDFDocument.create();
   doc.setTitle(pdfSafe(`${input.templateTitle} - ${input.patient.lastName.toUpperCase()} ${input.patient.firstName}`));
   doc.setAuthor(pdfSafe(input.practitionerName));
@@ -178,12 +182,14 @@ export async function buildConsentPdf(input: ConsentPdfInput): Promise<{ bytes: 
     w.space(6);
   }
 
+  if (opts.infoOnly) return { bytes: await doc.save(), box: { page: 1, x: 0, y: 0, width: 85, height: 37 } };
+
   // ---- Consent page ----
   w.newPage();
   w.text("CONSENTEMENT DU PATIENT", { size: 13, bold: true, color: ACCENT, gap: 10 });
   const p = input.patient;
   w.text(`Je soussigné(e) : ${p.firstName} ${p.lastName.toUpperCase()}`, { size: 10.5, gap: 2 });
-  w.text(`Né(e) le : ${frBirthDate(p.birthDate)}    Téléphone : ${p.phone}`, { size: 10.5, gap: 10 });
+  w.text(`Né(e) le : ${frBirthDate(p.birthDate)}${p.phone ? `    Téléphone : ${p.phone}` : ""}`, { size: 10.5, gap: 10 });
   for (const s of input.consent.statement) w.text(s, { size: 10, gap: 6 });
   w.space(4);
   w.text(`Geste consenti : ${input.plannedAct}`, { size: 10.5, bold: true, gap: 2 });
@@ -293,7 +299,8 @@ export interface EvidenceInput {
   templateVersion: number;
   requestId: string;
   signedSha256: string | null;
-  sections: { title: string; visibleMs: number; acknowledgedAt: Date | null }[];
+  sections: { title: string; visibleMs: number; acknowledgedAt: Date | null; fullTextOpenedAt: Date | null }[];
+  fullDocumentOpenedAt?: Date | null;
   events: { at: Date; label: string; actor: string; ip: string | null; details: string }[];
   flags: { message: string; detail: string; reviewedAt: Date | null }[];
 }
@@ -315,10 +322,18 @@ export async function buildEvidencePdf(e: EvidenceInput): Promise<Uint8Array> {
 
   w.text("Lecture de la fiche d'information", { size: 11.5, bold: true, color: ACCENT, gap: 4 });
   const total = e.sections.reduce((a, s) => a + s.visibleMs, 0);
-  w.text(`Temps de lecture total à l'écran : ${fmtDuration(total)}`, { size: 10, gap: 4 });
+  w.text(`Temps de lecture total à l'écran : ${fmtDuration(total)}`, { size: 10, gap: 2 });
+  w.text(
+    "Le patient a reçu un résumé de chaque partie, avec accès en un geste au texte intégral du médecin. Le texte intégral figure dans le document signé.",
+    { size: 9, color: MUTED, gap: 2 },
+  );
+  w.text(
+    `Document intégral (PDF) : ${e.fullDocumentOpenedAt ? `ouvert le ${frDate(e.fullDocumentOpenedAt)}` : "non téléchargé"}`,
+    { size: 9.5, gap: 4 },
+  );
   for (const s of e.sections) {
     w.text(
-      `${s.title} : ${s.acknowledgedAt ? `confirmée le ${frDate(s.acknowledgedAt)}` : "non confirmée"} - ${fmtDuration(s.visibleMs)} à l'écran`,
+      `${s.title} : ${s.acknowledgedAt ? `confirmée le ${frDate(s.acknowledgedAt)}` : "non confirmée"} - ${fmtDuration(s.visibleMs)} à l'écran - ${s.fullTextOpenedAt ? `texte intégral ouvert le ${frDate(s.fullTextOpenedAt)}` : "résumé lu, texte intégral non ouvert"}`,
       { size: 9.5, indent: 6, gap: 2 },
     );
   }
