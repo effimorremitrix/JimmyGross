@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the static Éclaira site into dist/.
 
-  BASE=https://eclaira.fr CONTACT=contact@eclaira.fr python3 build.py
+  BASE=https://eclaira.health CONTACT=contact@eclaira.health python3 build.py
 
 Pages in pages/ carry a header comment (TITLE, DESC, PATH, optional ROBOTS)
 and share _head/_header/_footer partials, so metadata cannot drift.
@@ -19,7 +19,7 @@ PAGES = ROOT / "pages"
 STATIC = ROOT / "site"
 DIST = ROOT / "dist"
 BASE = os.environ.get("BASE", "https://eclaira.pages.dev").rstrip("/")
-CONTACT = os.environ.get("CONTACT", "contact@eclaira.fr")
+CONTACT = os.environ.get("CONTACT", "contact@eclaira.health")
 VERSION = str(int(time.time()))
 TODAY = time.strftime("%Y-%m-%d")
 

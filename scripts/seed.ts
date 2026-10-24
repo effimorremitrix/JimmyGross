@@ -77,8 +77,8 @@ async function main() {
   const [doctor] = await db
     .insert(schema.users)
     .values([
-      { practiceId: practice.id, email: "dr.gross@demo.eclaira.fr", name: "Dr Jimmy Gross", passwordHash: hash, role: "practitioner" },
-      { practiceId: practice.id, email: "secretariat@demo.eclaira.fr", name: "Secrétariat", passwordHash: hash, role: "assistant" },
+      { practiceId: practice.id, email: "dr.gross@demo.eclaira.health", name: "Dr Jimmy Gross", passwordHash: hash, role: "practitioner" },
+      { practiceId: practice.id, email: "secretariat@demo.eclaira.health", name: "Secrétariat", passwordHash: hash, role: "assistant" },
     ])
     .returning();
 
@@ -266,7 +266,7 @@ async function main() {
 
   console.log("\nSeeded the demo practice.");
   console.log("Demo agenda export (next week): samples/agenda-semaine-demo.csv");
-  console.log(`Login: dr.gross@demo.eclaira.fr / ${password}  (or secretariat@demo.eclaira.fr)`);
+  console.log(`Login: dr.gross@demo.eclaira.health / ${password}  (or secretariat@demo.eclaira.health)`);
   console.log("Patient links to try:");
   for (const l of links) console.log(`  ${l}`);
   await pool.end();

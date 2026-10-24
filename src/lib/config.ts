@@ -15,7 +15,7 @@ const schema = z.object({
   TWILIO_FROM: z.string().optional(),
   EMAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
   SMTP_URL: z.string().optional(),
-  EMAIL_FROM: z.string().default("Éclaira <no-reply@eclaira.fr>"),
+  EMAIL_FROM: z.string().default("Éclaira <no-reply@eclaira.health>"),
   /** Bearer secret for the scheduled sender (/api/cron/send-due). */
   CRON_SECRET: z.string().optional(),
   /** Yousign needs an e-mail per signer; used only when the patient has none (delivery stays SMS). */

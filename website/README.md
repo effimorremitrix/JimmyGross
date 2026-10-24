@@ -4,7 +4,7 @@ Static marketing site for Éclaira (French, self-hosted fonts, no trackers), dep
 
 ```bash
 python3 build.py                      # builds dist/ (BASE defaults to https://eclaira.pages.dev)
-BASE=https://eclaira.fr CONTACT=contact@eclaira.fr python3 build.py
+BASE=https://eclaira.health CONTACT=contact@eclaira.health python3 build.py
 python3 -m http.server 4173 --directory dist
 ```
 
