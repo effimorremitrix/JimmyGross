@@ -229,10 +229,18 @@ export async function buildConsentPdf(
     const ih = img.height * scale;
     w.page.drawImage(img, { x: boxX + (boxW - iw) / 2, y: boxBottom + (boxH - ih) / 2, width: iw, height: ih });
   }
-  w.page.drawText(pdfSafe("Signature du médecin : confirmée le jour de l'acte"), {
+  // The provider stamps its certified signature in the box on the right.
+  w.page.drawText(pdfSafe("Signature électronique certifiée"), {
     x: boxX + boxW + 20,
     y: boxBottom + boxH - 12,
     size: 9,
+    font,
+    color: MUTED,
+  });
+  w.page.drawText(pdfSafe("Le geste réalisé est confirmé par le médecin le jour de l'acte."), {
+    x: boxX,
+    y: boxBottom - 14,
+    size: 8.5,
     font,
     color: MUTED,
   });
@@ -244,7 +252,7 @@ export async function buildConsentPdf(
     width: 180,
     height: 70,
   };
-  w.y = boxBottom - 10;
+  w.y = boxBottom - 24;
 
   return { bytes: await doc.save(), box };
 }

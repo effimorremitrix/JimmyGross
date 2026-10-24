@@ -299,7 +299,10 @@ export async function confirmOtp(token: string, otp: string): Promise<Result> {
   const res = await provider.signWithOtp(providerRef(r, ctx.patient), {
     otp: code,
     ip,
-    consentGivenAt: r.patientAckAt ?? new Date(),
+    // Consent to sign electronically is given when the patient confirms the code.
+    // Yousign requires it after the request was activated, so it cannot be the
+    // earlier checkbox time (kept separately in our evidence as patientAckAt).
+    consentGivenAt: new Date(Date.now() - 1000),
     signaturePng: r.signatureImage ? new Uint8Array(r.signatureImage) : null,
     signerName: `${ctx.patient.firstName} ${ctx.patient.lastName}`,
     level: r.signatureLevel,

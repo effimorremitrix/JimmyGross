@@ -113,33 +113,25 @@ export class YousignProvider implements SignatureProvider {
     p: { otp: string; ip: string | null; consentGivenAt: Date; signaturePng: Uint8Array | null },
   ): Promise<SignResult> {
     if (!p.ip) throw new Error("A public IP address is required by Yousign to sign");
-    const form = new FormData();
-    form.append("consent_given_at", p.consentGivenAt.toISOString().replace(/\.\d{3}Z$/, "Z"));
-    form.append("ip_address", p.ip);
-    form.append("otp", p.otp);
-    if (p.signaturePng) {
-      form.append("signature_image", new Blob([Buffer.from(p.signaturePng)], { type: "image/png" }), "signature.png");
-    }
+    // The drawn signature is already embedded in the PDF we uploaded, so the
+    // JSON form is enough; Yousign stamps its own signature in the field.
     try {
       await this.call(`/signature_requests/${ref.providerRequestId}/signers/${ref.signerId}/sign`, {
         method: "POST",
-        body: p.signaturePng ? form : undefined,
-        ...(p.signaturePng
-          ? {}
-          : {
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                consent_given_at: p.consentGivenAt.toISOString().replace(/\.\d{3}Z$/, "Z"),
-                ip_address: p.ip,
-                otp: p.otp,
-              }),
-            }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consent_given_at: p.consentGivenAt.toISOString().replace(/\.\d{3}Z$/, "Z"),
+          ip_address: p.ip,
+          otp: p.otp,
+        }),
       });
       return { ok: true };
     } catch (e) {
       if (e instanceof YousignError && e.status === 400) {
+        console.warn("[yousign] sign rejected:", e.message);
         const msg = e.message.toLowerCase();
         if (msg.includes("expired")) return { ok: false, reason: "expired" };
+        if (!msg.includes("otp")) throw e;
         if (msg.includes("attempt")) return { ok: false, reason: "too_many_attempts" };
         return { ok: false, reason: "bad_otp" };
       }
