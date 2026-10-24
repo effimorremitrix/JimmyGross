@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   integer,
+  bigint,
   jsonb,
   boolean,
   pgEnum,
@@ -209,17 +210,44 @@ export const readingEvents = pgTable(
   (t) => [uniqueIndex("reading_events_uq").on(t.requestId, t.sectionId)],
 );
 
+/**
+ * Every Pre-Check submission, kept forever. A patient who changes an answer
+ * creates a new row; the earlier declaration stays as evidence.
+ * Append-only: a database trigger rejects UPDATE and DELETE.
+ */
+export const precheckSubmissions = pgTable(
+  "precheck_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requestId: uuid("request_id").notNull().references(() => consentRequests.id),
+    /** 1, 2, 3... per request. */
+    seq: integer("seq").notNull(),
+    answers: jsonb("answers").$type<PrecheckAnswers>().notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("precheck_submissions_uq").on(t.requestId, t.seq)],
+);
+
 /** A Pre-Check answer that the practitioner must look at before the act. */
-export const precheckFlags = pgTable("precheck_flags", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  requestId: uuid("request_id").notNull().references(() => consentRequests.id),
-  questionId: text("question_id").notNull(),
-  severity: flagSeverityEnum("severity").notNull(),
-  message: text("message").notNull(),
-  detail: text("detail").notNull().default(""),
-  reviewedById: uuid("reviewed_by_id").references(() => users.id),
-  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-});
+export const precheckFlags = pgTable(
+  "precheck_flags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    requestId: uuid("request_id").notNull().references(() => consentRequests.id),
+    /** The submission that raised this flag (null only for flags older than submissions). */
+    submissionId: uuid("submission_id").references(() => precheckSubmissions.id),
+    questionId: text("question_id").notNull(),
+    severity: flagSeverityEnum("severity").notNull(),
+    message: text("message").notNull(),
+    detail: text("detail").notNull().default(""),
+    reviewedById: uuid("reviewed_by_id").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** Set when a later submission replaced this one. The flag is kept, never deleted. */
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    supersededBySubmissionId: uuid("superseded_by_submission_id").references(() => precheckSubmissions.id),
+  },
+  (t) => [index("precheck_flags_request_idx").on(t.requestId, t.supersededAt)],
+);
 
 /** Stored PDFs. Kept in the database (on the HDS-certified host) for v1. */
 export const documents = pgTable("documents", {
@@ -242,7 +270,17 @@ export const otpChallenges = pgTable("otp_challenges", {
   usedAt: timestamp("used_at", { withTimezone: true }),
 });
 
-/** Append-only evidence log. Every patient and staff action lands here. */
+/**
+ * Append-only evidence log. Every patient and staff action lands here.
+ *
+ * Integrity (migration 0002, enforced in the database, not in app code):
+ * - A BEFORE INSERT trigger chains each row to the previous row of the same
+ *   practice: hash = sha256(prev_hash | canonical row). chain_seq, prev_hash
+ *   and hash are always set by the trigger; app code never writes them.
+ * - UPDATE, DELETE and TRUNCATE are rejected by triggers.
+ * - verify_audit_chain(practice_id) recomputes the chain and returns the
+ *   first broken chain_seq, or null when intact.
+ */
 export const auditEvents = pgTable(
   "audit_events",
   {
@@ -255,8 +293,14 @@ export const auditEvents = pgTable(
     ip: text("ip"),
     userAgent: text("user_agent"),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    chainSeq: bigint("chain_seq", { mode: "number" }),
+    prevHash: text("prev_hash"),
+    hash: text("hash"),
   },
-  (t) => [index("audit_events_request_idx").on(t.requestId, t.at)],
+  (t) => [
+    index("audit_events_request_idx").on(t.requestId, t.at),
+    uniqueIndex("audit_events_chain_uq").on(t.practiceId, t.chainSeq),
+  ],
 );
 
 /** One uploaded agenda file and what it produced. */

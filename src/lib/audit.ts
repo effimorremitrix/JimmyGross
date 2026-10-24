@@ -4,7 +4,11 @@ import { requestMeta } from "./request-meta";
 
 export type AuditActor = "patient" | "system" | "provider" | `user:${string}`;
 
-/** Appends one event to the evidence log. Never updated, never deleted. */
+/**
+ * Appends one event to the evidence log. The database chains it to the
+ * previous event of the practice (sha256) and rejects any later UPDATE or
+ * DELETE; see drizzle/0002_evidence_integrity.sql.
+ */
 export async function audit(params: {
   practiceId: string;
   requestId?: string | null;
@@ -49,6 +53,9 @@ export const AUDIT_LABEL: Record<string, string> = {
   "signature.signed": "Document signé",
   "signature.provider_started": "Signature avancée démarrée",
   "flag.reviewed": "Alerte vérifiée",
+  "flag.unreviewed": "Vérification d'alerte annulée",
+  "flag.withdrawn_after_review": "Réponse retirée par le patient après vérification",
+  "flag.changed_after_review": "Réponse modifiée par le patient après vérification",
   "act.confirmed": "Geste confirmé par le médecin",
   "document.downloaded": "Document téléchargé",
 };

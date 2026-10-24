@@ -311,6 +311,10 @@ export interface EvidenceInput {
   fullDocumentOpenedAt?: Date | null;
   events: { at: Date; label: string; actor: string; ip: string | null; details: string }[];
   flags: { message: string; detail: string; reviewedAt: Date | null }[];
+  /** Answers the patient later replaced; kept so the review history stays provable. */
+  supersededFlags?: { message: string; detail: string; reviewedAt: Date | null; supersededAt: Date }[];
+  /** State of the practice's hash-chained journal at export time. */
+  chain?: { intact: boolean; brokenAt: number | null; headSeq: number | null; headHash: string | null };
 }
 
 /** The "dossier de preuve": what was shown, read, answered and signed, and when. */
@@ -358,7 +362,27 @@ export async function buildEvidencePdf(e: EvidenceInput): Promise<Uint8Array> {
     w.space(8);
   }
 
+  if (e.supersededFlags?.length) {
+    w.text("Réponses remplacées par le patient", { size: 11.5, bold: true, color: ACCENT, gap: 4 });
+    for (const f of e.supersededFlags) {
+      w.text(
+        `${f.message}${f.detail ? ` : ${f.detail}` : ""} - ${f.reviewedAt ? `vérifiée le ${frDate(f.reviewedAt)}` : "non vérifiée"} - remplacée le ${frDate(f.supersededAt)}`,
+        { size: 9.5, indent: 6, gap: 2 },
+      );
+    }
+    w.space(8);
+  }
+
   w.text("Journal horodaté", { size: 11.5, bold: true, color: ACCENT, gap: 4 });
+  if (e.chain) {
+    w.text(
+      e.chain.intact
+        ? "Journal chaîné (SHA-256) : chaque événement contient l'empreinte du précédent ; la chaîne a été recalculée à l'export et est intègre."
+        : `Attention : la vérification de la chaîne échoue à l'événement n° ${e.chain.brokenAt}.`,
+      { size: 9, color: e.chain.intact ? MUTED : ACCENT, gap: 2 },
+    );
+    if (e.chain.headHash) w.text(`Dernier maillon (n° ${e.chain.headSeq}) : ${e.chain.headHash}`, { size: 8.5, color: MUTED, gap: 4 });
+  }
   for (const ev of e.events) {
     w.text(`${frDate(ev.at)} - ${ev.label} (${ev.actor}${ev.ip ? `, IP ${ev.ip}` : ""})${ev.details ? ` - ${ev.details}` : ""}`, {
       size: 9,

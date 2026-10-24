@@ -33,11 +33,16 @@ async function main() {
   // Wipe demo practice (child tables first).
   const existing = await db.query.practices.findFirst({ where: eq(schema.practices.name, "Cabinet du Dr Jimmy Gross") });
   if (existing) {
+    // Evidence tables are append-only (migration 0002). Wiping demo data needs a
+    // superuser session that skips triggers; the app's own role cannot do this.
     await pool.query(
-      `DELETE FROM audit_events WHERE practice_id=$1;
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       DELETE FROM audit_events WHERE practice_id=$1;
        DELETE FROM otp_challenges WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM documents WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM precheck_flags WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
+       DELETE FROM precheck_submissions WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM reading_events WHERE request_id IN (SELECT id FROM consent_requests WHERE practice_id=$1);
        DELETE FROM consent_requests WHERE practice_id=$1;
        DELETE FROM import_batches WHERE practice_id=$1;
@@ -47,7 +52,8 @@ async function main() {
        DELETE FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE practice_id=$1);
        DELETE FROM templates WHERE practice_id=$1;
        DELETE FROM users WHERE practice_id=$1;
-       DELETE FROM practices WHERE id=$1;`.replace(/\$1/g, `'${existing.id}'`),
+       DELETE FROM practices WHERE id=$1;
+       COMMIT;`.replace(/\$1/g, `'${existing.id}'`),
     );
   }
 
@@ -175,8 +181,12 @@ async function main() {
     }
 
     if (d.state === "signed" && answers) {
+      const [submission] = await db
+        .insert(schema.precheckSubmissions)
+        .values({ requestId: req.id, seq: 1, answers, submittedAt: new Date(signedAt.getTime() - 120_000) })
+        .returning();
       for (const f of computeFlags(T.questions, d.act, answers)) {
-        await db.insert(schema.precheckFlags).values({ requestId: req.id, questionId: f.questionId, severity: f.severity, message: f.message, detail: f.detail });
+        await db.insert(schema.precheckFlags).values({ requestId: req.id, submissionId: submission.id, questionId: f.questionId, severity: f.severity, message: f.message, detail: f.detail });
       }
       const { bytes } = await buildConsentPdf({
         practiceName: practice.name,

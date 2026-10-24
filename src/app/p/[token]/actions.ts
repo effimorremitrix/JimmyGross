@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { audit } from "@/lib/audit";
@@ -11,7 +11,7 @@ import { checkOtp, issueOtp } from "@/lib/otp";
 import { buildConsentPdf } from "@/lib/pdf";
 import { requestMeta } from "@/lib/request-meta";
 import { providerByName, signatureProvider } from "@/lib/signature";
-import { computeFlags, validateAnswers } from "@/domain/precheck";
+import { computeFlags, reviewedFlagChanges, validateAnswers, withdrawnAfterReviewFlag } from "@/domain/precheck";
 import { atLeast } from "@/domain/status";
 import type { PrecheckAnswers } from "@/domain/types";
 import { finalizeSigned, providerRef, setStatus } from "@/server/consent";
@@ -158,12 +158,36 @@ export async function submitPrecheck(token: string, input: PrecheckAnswers): Pro
   if (!check.ok) return { ok: false, error: "Merci de répondre à toutes les questions." };
 
   const flags = computeFlags(ctx.version.questions, r.plannedAct, answers);
-  await db.transaction(async (tx) => {
-    await tx.update(schema.consentRequests).set({ answers, updatedAt: new Date() }).where(eq(schema.consentRequests.id, r.id));
-    await tx.delete(schema.precheckFlags).where(eq(schema.precheckFlags.requestId, r.id));
-    if (flags.length) {
-      await tx.insert(schema.precheckFlags).values(flags.map((f) => ({ requestId: r.id, ...f })));
+  // Append, never overwrite: the earlier declaration and the practitioner's
+  // review of it stay in the evidence; the old flags are only marked superseded.
+  const { submission, changes } = await db.transaction(async (tx) => {
+    // Serializes concurrent submissions of the same request.
+    await tx.execute(sql`SELECT 1 FROM consent_requests WHERE id = ${r.id} FOR UPDATE`);
+    const [{ last }] = await tx
+      .select({ last: max(schema.precheckSubmissions.seq) })
+      .from(schema.precheckSubmissions)
+      .where(eq(schema.precheckSubmissions.requestId, r.id));
+    const [submission] = await tx
+      .insert(schema.precheckSubmissions)
+      .values({ requestId: r.id, seq: (last ?? 0) + 1, answers })
+      .returning();
+    const active = await tx.query.precheckFlags.findMany({
+      where: and(eq(schema.precheckFlags.requestId, r.id), isNull(schema.precheckFlags.supersededAt)),
+    });
+    const changes = reviewedFlagChanges(active, flags);
+    if (active.length) {
+      await tx
+        .update(schema.precheckFlags)
+        .set({ supersededAt: submission.submittedAt, supersededBySubmissionId: submission.id })
+        .where(inArray(schema.precheckFlags.id, active.map((f) => f.id)));
     }
+    // A reviewed answer the patient withdrew becomes a fresh alert to look at again.
+    const raised = [...flags, ...changes.filter((c) => c.kind === "withdrawn").map(withdrawnAfterReviewFlag)];
+    if (raised.length) {
+      await tx.insert(schema.precheckFlags).values(raised.map((f) => ({ requestId: r.id, submissionId: submission.id, ...f })));
+    }
+    await tx.update(schema.consentRequests).set({ answers, updatedAt: new Date() }).where(eq(schema.consentRequests.id, r.id));
+    return { submission, changes };
   });
   await setStatus(r, "precheck_done");
   await audit({
@@ -171,8 +195,17 @@ export async function submitPrecheck(token: string, input: PrecheckAnswers): Pro
     requestId: r.id,
     actor: "patient",
     type: "patient.precheck_submitted",
-    data: { flags: flags.map((f) => f.questionId) },
+    data: { submissionId: submission.id, seq: submission.seq, flags: flags.map((f) => f.questionId) },
   });
+  for (const c of changes) {
+    await audit({
+      practiceId: r.practiceId,
+      requestId: r.id,
+      actor: "patient",
+      type: c.kind === "withdrawn" ? "flag.withdrawn_after_review" : "flag.changed_after_review",
+      data: { questionId: c.questionId, submissionId: submission.id },
+    });
+  }
   return { ok: true, flagged: flags.length };
 }
 

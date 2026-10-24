@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { parisDayRange } from "@/lib/dates";
 
@@ -20,7 +20,9 @@ export async function dayView(practiceId: string, ymd: string) {
   const reqIds = requests.map((r) => r.id);
   const [patients, flags, reads] = await Promise.all([
     db.select().from(schema.patients).where(inArray(schema.patients.id, appts.map((a) => a.patientId))),
-    reqIds.length ? db.select().from(schema.precheckFlags).where(inArray(schema.precheckFlags.requestId, reqIds)) : [],
+    reqIds.length
+      ? db.select().from(schema.precheckFlags).where(and(inArray(schema.precheckFlags.requestId, reqIds), isNull(schema.precheckFlags.supersededAt)))
+      : [],
     reqIds.length ? db.select().from(schema.readingEvents).where(inArray(schema.readingEvents.requestId, reqIds)) : [],
   ]);
 
@@ -61,7 +63,7 @@ export async function requestDetail(practiceId: string, requestId: string) {
     where: and(eq(schema.consentRequests.id, requestId), eq(schema.consentRequests.practiceId, practiceId)),
   });
   if (!request) return null;
-  const [patient, appointment, version, flags, reads, events, docs] = await Promise.all([
+  const [patient, appointment, version, allFlags, reads, events, docs, submissions, chain] = await Promise.all([
     db.query.patients.findFirst({ where: eq(schema.patients.id, request.patientId) }),
     db.query.appointments.findFirst({ where: eq(schema.appointments.id, request.appointmentId) }),
     db.query.templateVersions.findFirst({ where: eq(schema.templateVersions.id, request.templateVersionId) }),
@@ -73,7 +75,43 @@ export async function requestDetail(practiceId: string, requestId: string) {
       .from(schema.documents)
       .where(eq(schema.documents.requestId, request.id))
       .orderBy(desc(schema.documents.createdAt)),
+    db
+      .select()
+      .from(schema.precheckSubmissions)
+      .where(eq(schema.precheckSubmissions.requestId, request.id))
+      .orderBy(asc(schema.precheckSubmissions.seq)),
+    evidenceChain(practiceId),
   ]);
   if (!patient || !appointment || !version) return null;
-  return { request, patient, appointment, version, flags, reads, events, docs };
+  const flags = allFlags.filter((f) => !f.supersededAt);
+  const supersededFlags = allFlags.filter((f) => f.supersededAt).sort((a, b) => +a.supersededAt! - +b.supersededAt!);
+  return { request, patient, appointment, version, flags, supersededFlags, submissions, reads, events, docs, chain };
+}
+
+export interface EvidenceChainStatus {
+  /** True when every event of the practice re-hashes to its stored value. */
+  intact: boolean;
+  /** First chain position that fails verification, when not intact. */
+  brokenAt: number | null;
+  /** chain_seq and hash of the latest event: the value to quote in a dispute. */
+  headSeq: number | null;
+  headHash: string | null;
+}
+
+/** Recomputes the practice's audit hash chain in the database (see migration 0002). */
+export async function evidenceChain(practiceId: string): Promise<EvidenceChainStatus> {
+  const res = await db.execute<{ broken: string | null; head_seq: string | null; head_hash: string | null }>(sql`
+    SELECT verify_audit_chain(${practiceId}::uuid) AS broken,
+           h.chain_seq AS head_seq, h.hash AS head_hash
+    FROM (SELECT 1) one
+    LEFT JOIN LATERAL (
+      SELECT chain_seq, hash FROM audit_events WHERE practice_id = ${practiceId}::uuid ORDER BY chain_seq DESC LIMIT 1
+    ) h ON true`);
+  const row = res.rows[0];
+  return {
+    intact: row?.broken == null,
+    brokenAt: row?.broken == null ? null : Number(row.broken),
+    headSeq: row?.head_seq == null ? null : Number(row.head_seq),
+    headHash: row?.head_hash ?? null,
+  };
 }

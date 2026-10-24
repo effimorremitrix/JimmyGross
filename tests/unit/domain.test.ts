@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicableQuestions, computeFlags, validateAnswers } from "@/domain/precheck";
+import { applicableQuestions, computeFlags, reviewedFlagChanges, validateAnswers, withdrawnAfterReviewFlag } from "@/domain/precheck";
 import { advance, atLeast, isTerminal } from "@/domain/status";
 import { infiltrationTemplate as T } from "@/domain/templates/infiltration-echoguidee";
 import type { PrecheckAnswers } from "@/domain/types";
@@ -110,5 +110,42 @@ describe("Template summaries", () => {
   });
   it("the consent statement mentions access to the full text", () => {
     expect(T.consent.statement.some((x) => x.includes("texte intégral"))).toBe(true);
+  });
+});
+
+describe("reviewedFlagChanges", () => {
+  const reviewed = new Date("2026-10-28T08:12:00Z");
+  const flag = (questionId: string, detail: string) => ({ questionId, severity: "warn" as const, message: "m", detail });
+
+  it("reports a reviewed flag the patient withdrew", () => {
+    const out = reviewedFlagChanges([{ questionId: "anticoag", message: "Antiagrégant", detail: "Kardégic 75 mg", reviewedAt: reviewed }], []);
+    expect(out).toEqual([{ questionId: "anticoag", kind: "withdrawn", previousMessage: "Antiagrégant", previousDetail: "Kardégic 75 mg", newDetail: null }]);
+  });
+
+  it("reports a reviewed flag whose detail changed", () => {
+    const out = reviewedFlagChanges(
+      [{ questionId: "anticoag", message: "Antiagrégant", detail: "Kardégic 75 mg", reviewedAt: reviewed }],
+      [flag("anticoag", "Eliquis 5 mg")],
+    );
+    expect(out[0]).toMatchObject({ kind: "changed", newDetail: "Eliquis 5 mg" });
+  });
+
+  it("ignores unreviewed flags and unchanged answers", () => {
+    expect(
+      reviewedFlagChanges(
+        [
+          { questionId: "allergie", message: "Allergie", detail: "Iode", reviewedAt: null },
+          { questionId: "anticoag", message: "Antiagrégant", detail: "Kardégic 75 mg", reviewedAt: reviewed },
+        ],
+        [flag("anticoag", "Kardégic 75 mg")],
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("withdrawnAfterReviewFlag", () => {
+  it("raises a warning that keeps the earlier declaration", () => {
+    const f = withdrawnAfterReviewFlag({ questionId: "anticoag", kind: "withdrawn", previousMessage: "Antiagrégant", previousDetail: "Kardégic 75 mg", newDetail: null });
+    expect(f).toEqual({ questionId: "anticoag", severity: "warn", message: "Réponse retirée après vérification : Antiagrégant", detail: "Déclaré auparavant : Kardégic 75 mg" });
   });
 });
