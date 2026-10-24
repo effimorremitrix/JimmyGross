@@ -26,7 +26,8 @@ function tomorrowAt(hhmm: string): Date {
 }
 
 async function main() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  // The owner role (eclaira_owner); DATABASE_URL is the fallback for local dev.
+  const pool = new Pool({ connectionString: process.env.DATABASE_OWNER_URL || process.env.DATABASE_URL });
   const db = drizzle(pool, { schema });
   const password = process.env.SEED_PASSWORD ?? "consentza-demo";
 
@@ -34,7 +35,9 @@ async function main() {
   const existing = await db.query.practices.findFirst({ where: eq(schema.practices.name, "Cabinet du Dr Jimmy Gross") });
   if (existing) {
     // Evidence tables are append-only (migration 0002). Wiping demo data needs a
-    // superuser session that skips triggers; the app's own role cannot do this.
+    // session that skips triggers: eclaira_owner, granted SET on
+    // session_replication_role by docker/postgres-init (or a superuser). The
+    // app's own role cannot do this.
     await pool.query(
       `BEGIN;
        SET LOCAL session_replication_role = replica;

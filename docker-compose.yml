@@ -1,4 +1,12 @@
 # Local development database only. Production Postgres must run on an HDS-certified host.
+#
+# POSTGRES_USER is the bootstrap superuser, for administration only: the app and
+# the scripts never use it. On first start, docker/postgres-init creates
+#   eclaira_owner  (DATABASE_OWNER_URL: migrations, demo seed)
+#   eclaira_app    (DATABASE_URL: the running app)
+# The bootstrap user and database keep their original "consentza" names so that
+# existing volumes and .env files keep working.
+# The init script runs only on an empty volume. For an existing one, see README.
 services:
   db:
     image: postgres:16-alpine
@@ -6,9 +14,13 @@ services:
       POSTGRES_USER: consentza
       POSTGRES_PASSWORD: consentza
       POSTGRES_DB: consentza
+      # Development passwords; override them in your shell or .env.
+      ECLAIRA_OWNER_PASSWORD: ${ECLAIRA_OWNER_PASSWORD:-eclaira_owner_dev}
+      ECLAIRA_APP_PASSWORD: ${ECLAIRA_APP_PASSWORD:-eclaira_app_dev}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
 volumes:
   pgdata:

@@ -22,12 +22,18 @@ First practice: **Dr Jimmy Gross** (rhumatologie interventionnelle), template *I
 
 ```bash
 cp .env.example .env            # set SESSION_SECRET: openssl rand -base64 48
-docker compose up -d db         # or any local Postgres 16
+docker compose up -d db         # or any local Postgres 16, see below
 npm install --legacy-peer-deps
-npm run db:migrate
-npm run db:seed                 # prints demo logins and patient links
-npm run dev                     # http://localhost:3000
+npm run db:migrate              # as eclaira_owner (DATABASE_OWNER_URL)
+npm run db:seed                 # as eclaira_owner; prints demo logins and patient links
+npm run dev                     # as eclaira_app (DATABASE_URL), http://localhost:3000
 ```
+
+The app connects as `eclaira_app`, which can only append to the evidence log; migrations and the seed use `eclaira_owner` (see [docs/COMPLIANCE.md](docs/COMPLIANCE.md#database-roles-evidence-integrity)). A new Docker volume gets both roles from `docker/postgres-init/`, with development passwords you can override with `ECLAIRA_OWNER_PASSWORD` / `ECLAIRA_APP_PASSWORD`.
+
+- **Existing Docker volume** (created before the roles): the init script does not run again. Either recreate it (`docker compose down -v`, which deletes local data), or keep it: run `ops/postgres/01-create-roles.sql`, `ops/postgres/02-adopt-existing-objects.sql` and `GRANT SET ON PARAMETER session_replication_role TO eclaira_owner;` as the `consentza` superuser, then `npm run db:migrate`. Until then, an old `.env` with the `consentza` superuser in `DATABASE_URL` keeps working in development; production refuses it.
+- **Own Postgres 16:** create the roles with `ops/postgres/01-create-roles.sql`, and for the demo seed also run `GRANT SET ON PARAMETER session_replication_role TO eclaira_owner;` as a superuser (local only).
+- Check the boundary any time: `psql "$DATABASE_URL" -f ops/postgres/03-verify-boundary.sql`.
 
 Demo login: `dr.gross@demo.consentza.fr` / `consentza-demo` (practitioner) or `secretariat@demo.consentza.fr` (assistant). The seed prints patient links with their birth dates and writes `samples/agenda-semaine-demo.csv` (next week) to try the import. With `DEMO_MODE=true`, the SMS code is shown on screen.
 
