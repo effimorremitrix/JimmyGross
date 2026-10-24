@@ -16,7 +16,7 @@ const log = (m) => console.log(new Date().toISOString().slice(11, 19), m);
 const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
 const staff = await (await browser.newContext({ locale: "fr-FR" })).newPage();
 await staff.goto(`${BASE}/login`);
-await staff.getByLabel("E-mail").fill("dr.gross@demo.eclaira.fr");
+await staff.getByLabel("E-mail").fill("dr.gross@demo.eclaira.health");
 await staff.getByLabel("Mot de passe").fill(process.env.SEED_PASSWORD ?? "eclaira-demo");
 await staff.getByRole("button", { name: "Se connecter" }).click();
 await staff.waitForURL(/\/cabinet$/);

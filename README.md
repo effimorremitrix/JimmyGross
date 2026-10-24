@@ -36,7 +36,7 @@ The app connects as `eclaira_app`, which can only append to the evidence log; mi
 - **Own Postgres 16:** create the roles with `ops/postgres/01-create-roles.sql`, and for the demo seed also run `GRANT SET ON PARAMETER session_replication_role TO eclaira_owner;` as a superuser (local only).
 - Check the boundary any time: `psql "$DATABASE_URL" -f ops/postgres/03-verify-boundary.sql`.
 
-Demo login: `dr.gross@demo.eclaira.fr` / `eclaira-demo` (practitioner) or `secretariat@demo.eclaira.fr` (assistant). The seed prints patient links with their birth dates and writes `samples/agenda-semaine-demo.csv` (next week) to try the import. With `DEMO_MODE=true`, the SMS code is shown on screen.
+Demo login: `dr.gross@demo.eclaira.health` / `eclaira-demo` (practitioner) or `secretariat@demo.eclaira.health` (assistant). The seed prints patient links with their birth dates and writes `samples/agenda-semaine-demo.csv` (next week) to try the import. With `DEMO_MODE=true`, the SMS code is shown on screen.
 
 ## Tests
 
@@ -63,7 +63,7 @@ The product was called Consentza. User-facing text now says Éclaira; a few inte
 
 - Session cookies stay `cz_staff` and `cz_patient` (renaming them would sign everyone out and invalidate open patient sessions).
 - The local Docker bootstrap user and database stay `consentza`, so existing volumes and `.env` files still connect.
-- Demo accounts moved to `@demo.eclaira.fr` with the default password `eclaira-demo`. A database seeded before the rename keeps the old `@demo.consentza.fr` logins until you run `npm run db:seed` again, which replaces them. A `SEED_PASSWORD` already set in `.env` still applies to both the seed and the e2e tests.
-- `EMAIL_FROM` defaults to `Éclaira <no-reply@eclaira.fr>`; an `EMAIL_FROM` already set in `.env` wins. Sending from `eclaira.fr` needs that domain's SPF/DKIM set up with the SMTP provider first.
+- Demo accounts moved to `@demo.eclaira.health` with the default password `eclaira-demo`. A database seeded before the rename keeps its old demo logins (`@demo.consentza.fr`, or `@demo.eclaira.fr` from the first rename) until you run `npm run db:seed` again, which replaces them. A `SEED_PASSWORD` already set in `.env` still applies to both the seed and the e2e tests.
+- `EMAIL_FROM` defaults to `Éclaira <no-reply@eclaira.health>`; an `EMAIL_FROM` already set in `.env` wins. Sending from `eclaira.health` needs the domain authenticated in Brevo (SPF, DKIM, DMARC records in Cloudflare DNS) first. Note: `eclaira.fr` belongs to an unrelated business; never send from it.
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/COMPLIANCE.md](docs/COMPLIANCE.md) · [docs/PILOT.md](docs/PILOT.md)

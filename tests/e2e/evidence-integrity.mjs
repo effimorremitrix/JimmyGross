@@ -70,7 +70,7 @@ try {
   // 2. The doctor reviews the alert.
   const staff = await (await browser.newContext({ locale: "fr-FR" })).newPage();
   await staff.goto(`${BASE}/login`);
-  await staff.getByLabel("E-mail").fill("dr.gross@demo.eclaira.fr");
+  await staff.getByLabel("E-mail").fill("dr.gross@demo.eclaira.health");
   await staff.getByLabel("Mot de passe").fill(process.env.SEED_PASSWORD ?? "eclaira-demo");
   await staff.getByRole("button", { name: "Se connecter" }).click();
   await staff.waitForURL(/\/cabinet$/);

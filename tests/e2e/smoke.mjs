@@ -143,12 +143,12 @@ async function staffFlow(browser) {
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
   await scan(page, "login");
-  await page.getByLabel("E-mail").fill("dr.gross@demo.eclaira.fr");
+  await page.getByLabel("E-mail").fill("dr.gross@demo.eclaira.health");
   await page.getByLabel("Mot de passe").fill("wrong-password");
   await page.getByRole("button", { name: "Se connecter" }).click();
   await page.getByText("E-mail ou mot de passe incorrect.").waitFor();
   ok("bad password rejected", true);
-  ok("e-mail kept after failed login", (await page.getByLabel("E-mail").inputValue()) === "dr.gross@demo.eclaira.fr");
+  ok("e-mail kept after failed login", (await page.getByLabel("E-mail").inputValue()) === "dr.gross@demo.eclaira.health");
   await page.getByLabel("Mot de passe").fill(process.env.SEED_PASSWORD ?? "eclaira-demo");
   await page.getByRole("button", { name: "Se connecter" }).click();
   await page.waitForURL(/\/cabinet$/);
