@@ -5,7 +5,9 @@ import { Logo } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { logout } from "../login/actions";
+import { AssistantDrawer } from "./assistant-drawer";
 import { NavLink } from "./nav-link";
+import { PageGuide } from "./page-guide";
 
 export default async function CabinetLayout({ children }: LayoutProps<"/cabinet">) {
   const staff = await requireStaff();
@@ -31,6 +33,7 @@ export default async function CabinetLayout({ children }: LayoutProps<"/cabinet"
             <NavLink href="/cabinet/import">Importer l&apos;agenda</NavLink>
             <NavLink href="/cabinet/nouveau">Nouvelle demande</NavLink>
             <NavLink href="/cabinet/modeles">Modèles</NavLink>
+            {c.ANTHROPIC_API_KEY ? <AssistantDrawer /> : null}
             <form action={logout} className="ml-2 flex items-center gap-2 border-l border-line pl-3">
               <span className="text-[14px] text-muted">{staff.name}</span>
               <button type="submit" className="min-h-11 rounded-lg px-2 text-[14px] font-medium text-brand hover:underline">
@@ -41,6 +44,7 @@ export default async function CabinetLayout({ children }: LayoutProps<"/cabinet"
         </div>
       </header>
       <main id="contenu" className="mx-auto flex max-w-[1240px] flex-col gap-5 px-6 py-6">
+        <PageGuide />
         {children}
       </main>
     </div>
