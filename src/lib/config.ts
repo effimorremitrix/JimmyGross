@@ -26,6 +26,11 @@ const schema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   LINK_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(10),
+  /** Turns on the cabinet's help assistant (Claude). Without it, the guide panel still works. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ASSISTANT_MODEL: z.string().min(1).default("claude-opus-5-5"),
+  /** Questions one staff member can ask the assistant per hour. */
+  ASSISTANT_HOURLY_LIMIT: z.coerce.number().int().min(1).max(1000).default(30),
 });
 
 export type Config = z.infer<typeof schema>;

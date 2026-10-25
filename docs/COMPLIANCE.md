@@ -20,6 +20,17 @@ Not legal advice. Items to close with a lawyer, the DPO and Dr Gross's professio
 - [ ] Register of processing; DPO contact.
 - [ ] Access logging: every document download is already logged (`document.downloaded`).
 
+## Help assistant (Anthropic)
+
+The cabinet's **Aide** chat sends staff questions to Anthropic's API (Claude) whenever `ANTHROPIC_API_KEY` is set. It is built to carry no patient data: the model sees only the practice guide, the person's role, the page they are on and their question; it has no access to patients, requests or documents; nothing is stored by Éclaira. The residual risk is a member of staff typing a patient's details into a question, which the drawer warns against on every opening and the assistant is told never to repeat or ask for.
+
+- [x] Anthropic named as a sub-processor on the privacy page (`website/pages/confidentialite`).
+- [ ] Anthropic DPA signed, and the transfer basis recorded (Anthropic processes in the US: EU-US Data Privacy Framework or SCCs).
+- [ ] Ask Anthropic for zero data retention on the organisation behind the key; until then API inputs are kept up to 30 days on Anthropic's side.
+- [ ] Add the assistant to the DPIA and the register of processing (purpose: staff support; data: staff questions; no health data intended).
+- [ ] Tell the practice's staff, in onboarding, never to type patient names, birth dates or health information into **Aide**.
+- [ ] If the practice or the DPO decides the risk isn't acceptable before the DPA is signed, unset `ANTHROPIC_API_KEY`: the menu item disappears and the written guide stays.
+
 ## Electronic signature (eIDAS)
 
 - SES = drawn signature + SMS code. Fast, legally valid; identity is not verified, so the reading trace matters.

@@ -152,6 +152,7 @@ async function staffFlow(browser) {
   await page.getByLabel("Mot de passe").fill(process.env.SEED_PASSWORD ?? "eclaira-demo");
   await page.getByRole("button", { name: "Se connecter" }).click();
   await page.waitForURL(/\/cabinet$/);
+  ok("practice guide under the agenda", (await page.locator("main > details summary").getByText("Agenda : les consentements du jour").count()) === 1);
 
   const tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
   await page.goto(`${BASE}/cabinet?jour=${tomorrow}`);
@@ -192,7 +193,8 @@ async function staffFlow(browser) {
   await page.locator('input[name="birthDate"]').fill("1990-05-12");
   await page.locator('input[name="phone"]').fill("06 70 80 90 10");
   await page.getByLabel("Localisation prévue").fill("Épaule droite");
-  await page.getByText("Je colle le lien moi-même dans Doctolib").click();
+  // By role: the page's user guide repeats this label word for word.
+  await page.getByRole("radio", { name: "Je colle le lien moi-même dans Doctolib" }).check();
   await page.getByRole("button", { name: "Créer la demande" }).click();
   await page.getByRole("heading", { name: "Demande créée" }).waitFor();
   const link = await page.getByLabel("Lien patient").inputValue();
@@ -242,7 +244,7 @@ async function staffFlow(browser) {
   const ymd = csvDay.split("/").reverse().join("-");
   await page.goto(`${BASE}/cabinet?jour=${ymd}`);
   await scan(page, "dashboard with scheduled sends");
-  ok("scheduled chip on dashboard", (await page.getByText("Programmé").count()) >= 2);
+  ok("scheduled chip on dashboard", (await page.locator("table").getByText("Programmé", { exact: true }).count()) >= 2);
   const hugoRow = page.locator("tr").filter({ hasText: "Hugo Blanc" });
   await hugoRow.getByRole("button", { name: "Copier un lien" }).click();
   await hugoRow.getByText("Lien copié").waitFor();

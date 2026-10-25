@@ -31,6 +31,12 @@ French is the default and the reference text. Other languages (English today) ar
 - **What follows the language.** Link SMS and e-mail, access and signing codes, every patient screen (`src/i18n/patient.ts`), Yousign's signer locale, and the consent PDF. The request keeps the language actually signed in, and the PDF carries a bilingual line naming who approved the translation, when, and that the French original is the reference. The proof file states the language too.
 - **What never changes with it.** Structure and rules come from the French source (`localizeContent`): section ids, flag severities, act keywords for applicable questions (matched on the French act). Practitioner alerts, the dashboard and the proof file stay French.
 
+## User guide and help assistant
+
+One guide per cabinet page, plus the patient's journey, in `src/guide`. The cabinet layout renders the current page's guide under the header (`page-guide.tsx`, picked from the URL by `guideIdForPath`), and the **Aide** drawer asks Claude, which reads the same text through its only tool, `read_guide`. So the page and the assistant can't disagree, and a renamed button fails `tests/unit/guide.test.ts` until the guide follows.
+
+The assistant is stateless: the drawer keeps the conversation in React state and posts it with each question (20 turns at most, 1,000 characters a question); `/api/assistant` checks the staff session and the per-person hourly limit, runs at most four model calls, and returns the reply. No transcript, no question text in logs, no patient data in the prompt. Links in answers become links only for `/cabinet` paths (`isSafeHref`).
+
 ## Request lifecycle
 
 ```
@@ -70,12 +76,13 @@ Built on demand from the database: template + version, per-section reading time 
 ```
 src/domain/          pure business rules (no I/O), unit-tested; i18n.ts = languages, translation overlay and checks
 src/i18n/            patient-facing strings per language (screens, errors, SMS, e-mail, consent PDF)
+src/guide/           practice user guide (fr.ts reference, en.ts line for line) and the help assistant's model loop
 src/db/              Drizzle schema + client
 src/lib/             config, auth, audit, crypto, dates, pdf, sms, signature providers
 src/server/          data access used by pages and actions (consent lifecycle, patient loading, dashboard queries)
 src/app/p/[token]/   patient flow (server page + client steps + server actions)
 src/app/cabinet/     practice dashboard
-src/app/api/         document downloads, Yousign webhook
+src/app/api/         document downloads, Yousign webhook, help assistant (/api/assistant)
 scripts/             migrate, seed
 tests/               unit (vitest) and end-to-end (Playwright + axe)
 ```
